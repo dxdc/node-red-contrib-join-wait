@@ -28,7 +28,7 @@
   "maintainers": [
     "Daniel Caspi <dan@element26.net>"
   ],
-  "name": "red-contrib-join-wait",
+  "name": "node-red-contrib-join-wait",
   "node-red": {
     "nodes": {
       "join-wait": "join-wait.js"
