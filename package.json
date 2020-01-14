@@ -1,0 +1,47 @@
+{
+  "author": "Daniel Caspi <dan@element26.net>",
+  "bugs": {
+    "url": "https://github.com/dxdc/node-red-contrib-join-wait/issues"
+  },
+  "dependencies": {
+    "jsonata": "^1.7.0"
+  },
+  "description": "Waits for incoming messages from different input paths to arrive within a fixed time window.",
+  "devDependencies": {},
+  "homepage": "https://github.com/dxdc/node-red-contrib-join-wait#readme",
+  "keywords": [
+    "node-red",
+    "join",
+    "parallel",
+    "timeout",
+    "wait",
+    "merge"
+  ],
+  "license": "MIT",
+  "licenses": [
+    {
+      "type": "MIT",
+      "url": "https://github.com/dxdc/node-red-contrib-join-wait/blob/master/LICENSE"
+    }
+  ],
+  "main": "join-wait.js",
+  "maintainers": [
+    "Daniel Caspi <dan@element26.net>"
+  ],
+  "name": "red-contrib-join-wait",
+  "node-red": {
+    "nodes": {
+      "join-wait": "join-wait.js"
+    }
+  },
+  "optionalDependencies": {},
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/dxdc/node-red-contrib-join-wait.git"
+  },
+  "scripts": {
+    "lint": "eslint *.js",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "version": "0.3.0"
+}
