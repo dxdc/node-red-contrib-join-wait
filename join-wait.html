@@ -1,46 +1,67 @@
 <script type="text/x-red" data-template-name="join-wait">
     <div class="form-row">
-        <label for="node-input-name"><i class="icon-tag"></i> Name</label>
-        <input type="text" id="node-input-name" placeholder="Name">
+        <label for="node-input-paths"><i class="fa fa-code-fork"></i> Paths (Wait)</label>
+        <input type="text" id="node-input-paths" placeholder="[&quot;path_1&quot;, &quot;path_2&quot;]">
     </div>
     <div class="form-row">
-        <label for="node-input-paths"><i class="fa code-fork"></i> Paths</label>
-        <input type="text" id="node-input-paths" placeholder='["path_1", "path_2"]'>
+        <label for="node-input-pathsToExpire"><i class="fa fa-code-fork"></i> Paths (Expire)</label>
+        <input type="text" id="node-input-pathsToExpire" placeholder="[&quot;not_path_3&quot;, &quot;not_path_4&quot;]">
     </div>
     <div class="form-row">
         <label for="node-input-pathTopic"><i class="fa fa-bookmark-o"></i> Paths topic</label>
-        <input type="text" id="node-input-pathTopic" placeholder='paths'>
+        <input type="text" id="node-input-pathTopic" placeholder="paths">
         <input type="hidden" id="node-input-pathTopicType">
     </div>
     <div class="form-row">
         <label for="node-input-correlationTopic"><i class="fa fa-bookmark-o"></i> Correlation topic</label>
-        <input type="text" id="node-input-correlationTopic" placeholder='_msgid'>
+        <input type="text" id="node-input-correlationTopic" placeholder="_msgid">
         <input type="hidden" id="node-input-correlationTopicType">
     </div>
     <div class="form-row">
-        <label for="node-input-timeout"><i class="fa fa-clock-o"></i> Timeout (ms)</label>
-        <input type="text" id="node-input-timeout" placeholder="Timeout">
+        <label for="node-input-timeout"><i class="fa fa-clock-o"></i> Timeout</label>
+        <input type="text" id="node-input-timeout" style="text-align:end; width:100px !important" placeholder="15">
+        <select id="node-input-timeoutUnits" style="width:200px !important">
+            <option value="1">Milliseconds</option>
+            <option value="1000">Seconds</option>
+            <option value="60000">Minutes</option>
+            <option value="3600000">Hours</option>
+            <option value="86400000">Days</option>
+        </select>
     </div>
     <div class="form-row">
         <label for="node-input-exactOrder"><i class="fa fa-sort"></i> Sequence order</label>
-        <select id="node-input-exactOrder" style="width:100%; margin-right:5px;">
+        <select id="node-input-exactOrder" style="width:70%; margin-right:5px;">
             <option value="false">Any order</option>
             <option value="true">Exact order</option>
         </select>
     </div>
     <div class="form-row">
         <label for="node-input-firstMsg"><i class="fa fa-comments-o"></i> Base message</label>
-        <select id="node-input-firstMsg" style="width:100%; margin-right:5px;">
+        <select id="node-input-firstMsg" style="width:70%; margin-right:5px;">
             <option value="true">First received</option>
             <option value="false">Last received</option>
         </select>
     </div>
     <div class="form-row">
         <label for="node-input-mapPayload"><i class="fa fa-arrow-right"></i> Merged data</label>
-        <select id="node-input-mapPayload" style="width:100%; margin-right:5px;">
+        <select id="node-input-mapPayload" style="width:70%; margin-right:5px;">
             <option value="false">Original Paths topic</option>
             <option value="true">Overwrite Paths topic with msg.payload</option>
         </select>
+    </div>
+    <div class="form-row">
+        <label for="node-input-ignoreUnmatched"><i class="fa fa-exclamation-triangle"></i> Unmatched paths</label>
+        <label for="node-input-ignoreUnmatched" style="width:70%">
+        <input type="checkbox" id="node-input-ignoreUnmatched" style="display:inline-block; width:22px; vertical-align:baseline;">Ignore unmatched paths</label>
+    </div>
+    <div class="form-row">
+        <label for="node-input-disableComplete"><i class="fa fa-refresh"></i> Reset queue</label>
+        <label for="node-input-disableComplete" style="width:70%">
+        <input type="checkbox" id="node-input-disableComplete" style="display:inline-block; width:22px; vertical-align:baseline;">Disable use of <code>msg.complete</code></label>
+    </div>
+    <div class="form-row">
+        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <input type="text" id="node-input-name" placeholder="Name">
     </div>
     <div class="form-row node-input-rule-container-row">
         <ol id="node-input-rule-container"></ol>
@@ -56,7 +77,7 @@
                 value: ''
             },
             paths: {
-                value: '["path_1", "path_2"]',
+                value: '',
                 validate: function(v) {
                     if (v === '') {
                         return true;
@@ -69,6 +90,23 @@
                     }
                 }
             },
+            pathsToExpire: {
+                value: '',
+                validate: function(v) {
+                    if (v === '') {
+                        return true;
+                    }
+                    try {
+                        const json = JSON.parse(v);
+                        return Array.isArray(json);
+                    } catch (err) {
+                        return false;
+                    }
+                }
+            },
+            ignoreUnmatched: {
+                value: false
+            },
             pathTopic: {
                 value: 'paths'
             },
@@ -76,7 +114,7 @@
                 value: 'msg'
             },
             correlationTopic: {
-                value: '_msgid'
+                value: ''
             },
             correlationTopicType: {
                 value: 'msg'
@@ -87,6 +125,10 @@
                 validate: function(v) {
                     return (Number(v) || 0) > 0;
                 }
+            },
+            timeoutUnits: {
+                value: 1,
+                validate: RED.validators.number()
             },
             exactOrder: {
                 value: 'false',
@@ -99,6 +141,9 @@
             mapPayload: {
                 value: 'false',
                 required: true
+            },
+            disableComplete: {
+                value: false
             }
         },
         inputs: 1,
@@ -128,30 +173,51 @@
                 typeField: $('#node-input-pathTopicType'),
                 types: ['msg']
             });
+            $('#node-input-timeout').spinner({
+                min: 1
+            });
         }
     });
 </script>
 
 <script type="text/x-red" data-help-name="join-wait">
-    <p>This node waits for messages from all items in the <code>Paths</code> array, which must be received inside of a designated time window.</p>
+    <p>This node waits for messages from all items in the <code>Paths (Wait)</code> array, which must be received inside of a designated time window.</p>
+
     <p>If all of the messages are received in that interval, a merged output is sent to the <code>success</code> output. Otherwise, any expired messages are sent to the <code>timeout</code> output. Either output can be optionally connected for further processing.</p>
-    <p>In the event of multiple/duplicate messages, the time window is adjusted as needed to continue evaluation on subsequent messages.</p>
+
+    <p>In the event of multiple messages, the time window is adjusted as needed to continue evaluation on subsequent messages. This node has several potential applications, including home automation. For instance, to handle a case where the light turning on/off is also triggering a motion sensor: IF a) light turned OFF, b) motion sensor activated, c) light turned ON all occur within 10 seconds, then turn light OFF.</p>
+
+    <p>Memory is managed to delete objects after they reach the <code>Timeout</code>.</p>
 
     <h3>Details</h3>
-    <p>Each item in the <code>Paths</code> array corresponds with an input path to wait for. E.g., <code>["path_1", "path_2", "other_path"]</code>. This can also be configured at runtime by passing an array using <code>msg.pathsToWait</code>.</p>  
-    <p><code>Paths topic</code> is a <code>msg</code> variable used to check each flow to see if all of the elements in <code>Paths</code> are matched. This can be <code>msg.topic</code>, <code>msg.paths</code>, etc. If this is not specified, <code>msg.paths</code> will be assumed.</p>
-    <p>Note that <code>Paths topic</code> can be set in one of two ways:</p>
-    <p>1. As a string, set to the path to check, e.g., <code>msg.paths = "path_1";</code></p>
-    <p>2. As an object, set to any value (e.g., <code>msg.paths["path_1"] = {"example": "data"};</code> or <code>msg.paths["path_1"] = 42;</code>).</p>
-    <p>If an object is used, multiple paths can be specified. This can be useful if one flow needs to trigger multiple paths.</p>
-    <p><code>Correlation topic</code> can be set, if desired, to a variable to ensure that only related messages are grouped. E.g., <code>msg._msgid</code> can be used to ensure that only messages from a *single* split flow are grouped together. If left blank, all messages will be assumed to be related.</p>
-    <p><code>Timeout</code> in milliseconds is required to designate the time window to receive all of the messages from <code>Paths</code>.</p>
-    <p><code>Sequence order</code> defines the criteria to evaluate the received messages. If multiple messages arrive, e.g., <code>["path_1", "path_2", "path_2", "path_1", "path_2", "path_2" "path_3"]</code>, the *exact* match is only triggered for this sequence: <code>["path_1", "path_2", "path_2" "path_3"]</code>.</p>
-    <p><code>Base message</code> defines which message object should be returned as the base message. Either the first message in a sequence or the last.</p>
-    <p><code>Merged data</code> defines how the data from <code>msg.paths</code> (or, another designed <code>Paths topic</code>) will be returned. Either, it can be merged in its original form, or, it can be overwritten with each respective <code>msg.payload</code>. This merged data is then appended to the <code>Base message</code>.</p>
 
-    <h3>Caveats</h3>
-    <p>Only the data from a single <code>Paths</code> item is returned. E.g., if two <code>path_2</code> messages arrive, only the data from the final one will be returned.</p>
-    <p>If <code>msg.pathsToWait</code> is used instead of setting <code>Paths</code>, note that each successive <code>msg.pathsToWait</code> will overwrite the previously stored global value. Due to the nature of the timeout, these <code>Paths</code> need to be able to be evaluated even after a message has arrived. Using a runtime <code>msg.pathsToWait</code> along with different <code>Correlation topics</code> may cause unexpected behavior.</p>
-    <p>The <code>timeout</code> should be padded with a small amount of overhead (i.e., ~5 ms or so) for the time it takes to evaluate all of the messages and conditions. This may become critical under very short timeouts.</p>    
+    <p>Each item in the <code>Paths (Wait)</code> array corresponds with an input path to wait for. E.g., <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;other_path&quot;]</code>. This can also be configured at runtime by passing an array using <code>msg.pathsToWait</code>.</p>
+
+    <p>Each item in the <code>Paths (Expire)</code> array corresponds with an input path that will immediately expire all messages in the queue without further processing. This acts as a reset. This can also be configured at runtime by passing an array using <code>msg.pathsToExpire</code>.</p>
+
+    <p><code>Paths topic</code> must be set to a <code>msg</code> property, which is used to check each flow to see if all of the elements in <code>Paths (Wait)</code> are matched. This can be <code>msg.topic</code>, <code>msg.paths</code>, etc. If this is not specified, <code>msg.paths</code> is the default.</p>
+
+    <p>Note that <code>Paths topic</code> can be set in one of two ways:</p>
+    <p>1. As a string, set to the path to check, e.g., <code>msg.paths = &quot;path_1&quot;;</code></p>
+    <p>2. As an object, set to any value (e.g., <code>msg.paths[&quot;path_1&quot;] = {&quot;example&quot;: &quot;data&quot;};</code> or <code>msg.paths[&quot;path_1&quot;] = 42;</code>). If the object format is used, multiple paths can be specified. For example, <code>msg.paths = {&quot;path_1&quot;: true, &quot;path_2&quot;: true};</code> This can be useful if one flow needs to trigger multiple paths.</p>
+
+    <p><code>Correlation topic</code> can be set, if desired, to ensure that only related messages are grouped. E.g., <code>msg._msgid</code> can be used to ensure that only messages from a <i>single</i> split flow are grouped together. If left blank, all messages will be assumed to be related.</p>
+
+    <p><code>Timeout</code> is required to designate the time window to receive all of the messages from <code>Paths (Wait)</code>.</p>
+
+    <p><code>Sequence order</code> defines the criteria to evaluate the received messages. An <i>exact</i> match can be specified, otherwise, it will match them in any order. To determine the order, the timestamp on the <i>latest</i> valid <code>Paths (Wait)</code> is used, even if multiple messages arrived earlier. In this case of waiting for <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;path_3&quot;]</code>, the <code>*</code> indicates which messages are used: <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;path_1&quot;*, &quot;path_2&quot;*, &quot;path_3&quot;*]</code>.</p>
+
+    <p><code>Base message</code> defines which message object should be returned as the base message. Either the first message in a sequence or the last.</p>
+
+    <p><code>Merged data</code> defines how the data from <code>msg.paths</code> (or, another designed <code>Paths topic</code>) will be returned. Either, it can be merged in its original form, or, it can be overwritten with each respective <code>msg.payload</code>. This merged data is then appended to the <code>Base message</code>. In the event that multiple messages arrive in this time interval with the same <code>Paths (Wait)</code>, only the data from the latest item is returned. For instance, if <code>Paths (Wait)</code> = <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;path_3&quot;]</code>, the <code>*</code> indicates which messages are used in this sequence: <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;path_1&quot;, &quot;path_2&quot;, &quot;path_1&quot;*, &quot;path_2&quot;*, &quot;path_3&quot;*]</code>. These additional messages will <b></b> be expired.</p>
+
+    <h3>Notes and Caveats</h3>
+
+    <p>If the <code>msg.complete</code> property is set, the message queue will be evaluated for completion, and then any remaining items in the queue will be immediately expired. This feature can be disabled in the settings, if desired.</p>
+
+    <p>All values within <code>Paths topic</code> must be contained by either <code>Paths (Wait)</code> or <code>Paths (Expire)</code>, or an error will be thrown. The <code>Unmatched paths</code> error notification can be disabled within the settings.</p>
+
+    <p>If <code>msg.pathsToWait</code> is used instead of setting <code>Paths (Wait)</code>, note that each successive <code>msg.pathsToWait</code> will overwrite the previously stored global value. Due to the nature of the timeout, <code>Paths (Wait)</code> needs to be evaluated even after a message has arrived. Changing the value of <code>msg.pathsToWait</code> between messages may cause unexpected behavior.</p>
+
+    <p><code>Timeout</code> should be padded with a small amount of overhead (i.e., ~5-10 ms or so) for the time it takes to evaluate all of the messages and conditions. This may become critical under very short timeouts.</p>
 </script>

@@ -11,6 +11,12 @@ module.exports = function(RED) {
             this.pathsToWait = false;
         }
 
+        try {
+            this.pathsToExpire = JSON.parse(config.pathsToExpire);
+        } catch (err) {
+            this.pathsToExpire = false;
+        }
+
         this.exactOrder = (config.exactOrder === 'true');
         this.topic = config.correlationTopic || false;
         this.topicType = config.correlationTopicType;
@@ -26,9 +32,11 @@ module.exports = function(RED) {
         this.pathTopic = config.pathTopic || 'paths';
         // this.pathTopicType = config.pathTopicType;
 
-        this.timeout = Number(config.timeout) || 15000;
+        this.timeout = (Number(config.timeout) || 15000) * (Number(config.timeoutUnits) || 1);
         this.firstMsg = (config.firstMsg === 'true');
         this.mapPayload = (config.mapPayload === 'true');
+        this.ignoreUnmatched = config.ignoreUnmatched;
+        this.disableComplete = config.disableComplete;
 
         this.paths = [];
         let node = this;
@@ -42,8 +50,13 @@ module.exports = function(RED) {
         });
 
         node.on('input', function(msg) {
+
+            //
+            // error checking
+            //
+
             if (!msg[node.pathTopic]) {
-                node.error(`join-wait "msg.${node.pathTopic}" undefined, must be msg.${node.pathTopic}["path"]=value.`, [msg, null]);
+                node.error(`join-wait "msg.${node.pathTopic}" is undefined, must be msg.${node.pathTopic}["path"]=value.`, [msg, null]);
                 return;
             }
 
@@ -54,20 +67,33 @@ module.exports = function(RED) {
             }
 
             if (typeof msg[node.pathTopic] !== 'object') {
-                node.error(`join-wait "msg.${node.pathTopic}" must be a string or object, e.g., msg.${node.pathTopic}["path"]=value.`, [msg, null]);
+                node.error(`join-wait "msg.${node.pathTopic}" must be a string or an object, e.g., msg.${node.pathTopic}["path"] = value.`, [msg, null]);
                 return;
             }
 
             node.pathsToWait = msg.pathsToWait || node.pathsToWait;
-            if (!node.pathsToWait) {
-                node.error('join-wait pathsToWait must be defined.', [msg, null]);
+            if (!node.pathsToWait && !Array.isArray(node.pathsToWait)) {
+                node.error('join-wait pathsToWait must be a defined array.', [msg, null]);
                 return;
             }
 
-            if (!findOne(Object.keys(msg[node.pathTopic]), node.pathsToWait)) {
-                node.error(`join-wait msg.${node.pathTopic}["path"] doesn't exist in pathsToWait!`, [msg, null]);
+            node.pathsToExpire = msg.pathsToExpire || node.pathsToExpire;
+            if (node.pathsToExpire && !Array.isArray(node.pathsToExpire)) {
+                node.error('join-wait pathsToExpire must be undefined or an array.', [msg, null]);
                 return;
             }
+
+            const hasExpirePath = hasAnyExpirePath(msg);
+            if (!hasExpirePath && !hasAnyPathToWait(msg)) {
+                if (!node.ignoreUnmatched) {
+                    node.error(`join-wait msg.${node.pathTopic}["${Object.keys(msg[node.pathTopic])}"] doesn't exist in pathsToWait or pathsToExpire!`, [msg, null]);
+                }
+                return;
+            }
+
+            //
+            // start processing
+            //
 
             let topic;
             if (node.topicType === 'jsonata') {
@@ -81,13 +107,26 @@ module.exports = function(RED) {
             if (!node.paths[topic] || typeof node.paths[topic] !== 'object') {
                 node.paths[topic] = {};
                 node.paths[topic].queue = [];
-                node.paths[topic].timeOutRunning = false;
+                makeNewTimeout(topic, node.timeout);
             }
 
             node.paths[topic].queue.push([Date.now(), msg]);
 
-            if (!testPathsComplete(topic) && !node.paths[topic].timeOut) {
-                makeNewTimeout(topic, node.timeout);
+            if (hasExpirePath || removeExpiredByTime(topic)) {
+                resetQueue(topic, true);
+                return;
+            }
+
+            const pathData = getReceivedPaths(topic);
+            if (findAllPaths(Object.keys(pathData), node.pathsToWait, node.exactOrder)) {
+                const num = (node.firstMsg) ? 0 : node.paths[topic].queue.length - 1;
+                let msg = node.paths[topic].queue[num][1];
+                msg[node.pathTopic] = pathData;
+                node.send([msg, null]);
+
+                resetQueue(topic, false);
+            } else if (!node.disableComplete && Object.prototype.hasOwnProperty.call(msg, 'complete')) {
+                resetQueue(topic, true);
             }
         });
 
@@ -97,11 +136,11 @@ module.exports = function(RED) {
             });
         }
 
-        function findAll(haystack, arr, exact) {
+        function findAllPaths(haystack, arr, exact) {
             const found = [];
 
-            return haystack.every(function(p, index) {
-                const val = arr.indexOf(p);
+            return arr.every(function(p, index) {
+                const val = haystack.indexOf(p);
                 if (val === -1) {
                     return false;
                 }
@@ -113,32 +152,25 @@ module.exports = function(RED) {
         }
 
         function makeNewTimeout(topic, timeout) {
-            if (node.paths[topic].timeOutRunning) {
-                return; // avoid race condition
-            }
             node.paths[topic].timeOut = setTimeout(function() {
-                node.paths[topic].timeOutRunning = true;
-                removeExpired(topic);
-
-                if (node.paths[topic].queue.length > 0) {
-                    if (!testPathsComplete(topic)) {
-                        const nextCheck = (node.paths[topic].queue[0][0] + node.timeout) - Date.now();
-                        node.paths[topic].timeOutRunning = false;
-                        makeNewTimeout(topic, nextCheck);
-                    }
+                if (removeExpiredByTime(topic)) {
+                    resetQueue(topic, true);
                 } else {
-                    delete node.paths[topic];
+                    const nextCheck = (node.paths[topic].queue[0][0] + node.timeout) - Date.now();
+                    makeNewTimeout(topic, nextCheck);
                 }
             }, timeout);
         }
 
-        function removeExpired(topic) {
+        function removeExpiredByTime(topic) {
             const minStartTime = Date.now() - node.timeout;
             while (node.paths[topic].queue.length > 0 &&
                 node.paths[topic].queue[0][0] < minStartTime) {
                 const expired = node.paths[topic].queue.shift();
                 node.send([null, expired[1]]);
             }
+
+            return (node.paths[topic].queue.length == 0);
         }
 
         function getReceivedPaths(topic) {
@@ -154,20 +186,24 @@ module.exports = function(RED) {
             }, {});
         }
 
-        function testPathsComplete(topic) {
-            const allPaths = getReceivedPaths(topic);
-            if (findAll(node.pathsToWait, Object.keys(allPaths), node.exactOrder)) {
-                clearTimeout(node.paths[topic].timeOut);
-                const num = (node.firstMsg) ? 0 : node.paths[topic].queue.length - 1;
-                let msg = node.paths[topic].queue[num][1];
-                msg[node.pathTopic] = allPaths;
-                node.send([msg, null]);
-                delete node.paths[topic];
+        function hasAnyPathToWait(msg) {
+            const pathKeys = Object.keys(msg[node.pathTopic]);
+            return findOne(pathKeys, node.pathsToWait);
+        }
 
-                return true;
+        function hasAnyExpirePath(msg) {
+            const pathKeys = Object.keys(msg[node.pathTopic]);
+            return node.pathsToExpire && findOne(pathKeys, node.pathsToExpire);
+        }
+
+        function resetQueue(topic, sendExpired) {
+            if (sendExpired) {
+                node.paths[topic].queue.forEach(function(q) {
+                    node.send([null, q[1]]);
+                });
             }
-
-            return false;
+            clearTimeout(node.paths[topic].timeOut);
+            delete node.paths[topic];
         }
     });
 };

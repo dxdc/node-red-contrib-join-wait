@@ -6,64 +6,74 @@ This Node-RED module waits for incoming messages from different input paths to a
 
 ## Description
 
-This node waits for messages from all items in the `Paths` array, which must be received inside of a designated time window.
+This node waits for messages from all items in the `Paths (Wait)` array, which must be received inside of a designated time window.
 
 If all of the messages are received in that interval, a merged output is sent to the `success` output. Otherwise, any expired messages are sent to the `timeout` output. Either output can be optionally connected for further processing.
 
-In the event of multiple/duplicate messages, the time window is adjusted as needed to continue evaluation on subsequent messages. This node has several potential applications, including home automation. For instance, to handle a case where the light turning on/off is also triggering a motion sensor: IF a) light turned OFF, b) motion sensor activated, c) light turned ON all occur within 10 seconds, then turn light OFF.
+In the event of multiple messages, the time window is adjusted as needed to continue evaluation on subsequent messages. This node has several potential applications, including home automation. For instance, to handle a case where the light turning on/off is also triggering a motion sensor: IF a) light turned OFF, b) motion sensor activated, c) light turned ON all occur within 10 seconds, then turn light OFF.
+
+Memory is managed to delete objects after they reach the `Timeout`.
 
 ## Configuration
 
-- Each item in the `Paths` array corresponds with an input path to wait for. E.g., `["path_1", "path_2", "other_path"]`.
+- Each item in the `Paths (Wait)` array corresponds with an input path to wait for. E.g., `["path_1", "path_2", "other_path"]`.
 
 > This can also be configured at runtime by passing an array using `msg.pathsToWait`.
 
-- `Paths topic` is a `msg` variable used to check each flow to see if all of the elements in `Paths` are matched. This can be `msg.topic`, `msg.paths`, etc. If this is not specified, `msg.paths` will be assumed.
+- Each item in the `Paths (Expire)` array corresponds with an input path that will immediately expire all messages in the queue without further processing. This acts as a reset.
+
+> This can also be configured at runtime by passing an array using `msg.pathsToExpire`.
+
+- `Paths topic` must be set to a `msg` property, which is used to check each flow to see if all of the elements in `Paths (Wait)` are matched. This can be `msg.topic`, `msg.paths`, etc. If this is not specified, `msg.paths` is the default.
 
 Note that `Paths topic` can be set in one of two ways:
 1. As a string, set to the path to check, e.g., `msg.paths = "path_1";`
 2. As an object, set to any value (e.g., `msg.paths["path_1"] = {"example": "data"};` or `msg.paths["path_1"] = 42;`).
 
-> If an object is used, multiple paths can be specified. This can be useful if one flow needs to trigger multiple paths.
+> If the object format is used, multiple paths can be specified. For example, `msg.paths = {"path_1": true, "path_2": true};` This can be useful if one flow needs to trigger multiple paths.
 
-- `Correlation topic` can be set, if desired, to a variable to ensure that only related messages are grouped. E.g., `msg._msgid` can be used to ensure that only messages from a *single* split flow are grouped together.
+- `Correlation topic` can be set, if desired, to ensure that only related messages are grouped. E.g., `msg._msgid` can be used to ensure that only messages from a *single* split flow are grouped together.
 
 > If left blank, all messages will be assumed to be related.
 
-- `Timeout` in milliseconds is required to designate the time window to receive all of the messages from `Paths`.
+- `Timeout` is required to designate the time window to receive all of the messages from `Paths (Wait)`.
 
-- `Sequence order` defines the criteria to evaluate the received messages. If multiple messages arrive, e.g., `["path_1", "path_2", "path_2", "path_1", "path_2", "path_2" "path_3"]`, the *exact* match is only triggered for this sequence: `["path_1", "path_2", "path_2" "path_3"]`.
+- `Sequence order` defines the criteria to evaluate the received messages. An *exact* match can be specified, otherwise, it will match them in any order.
+
+> To determine the order, the timestamp on the *latest* valid `Paths (Wait)` is used, even if multiple messages arrived earlier. In this case of waiting for `["path_1", "path_2", "path_3"]`, the `*` indicates which messages are used: `["path_1", "path_2", "path_1"*, "path_2"*, "path_3"*]`.
 
 - `Base message` defines which message object should be returned as the base message. Either the first message in a sequence or the last.
 
 - `Merged data` defines how the data from `msg.paths` (or, another designed `Paths topic`) will be returned. Either, it can be merged in its original form, or, it can be overwritten with each respective `msg.payload`. This merged data is then appended to the `Base message`.
 
-## Caveats
+> In the event that multiple messages arrive in this time interval with the same `Paths (Wait)`, only the data from the latest item is returned. For instance, if `Paths (Wait)` = `["path_1", "path_2", "path_3"]`, the `*` indicates which messages are used in this sequence: `["path_1", "path_2", "path_1", "path_2", "path_1"*, "path_2"*, "path_3"*]`. These additional messages will **not** be expired.
 
-- Only the data from a single `Paths` item is returned. E.g., if two `path_2` messages arrive, only the data from the final one will be returned.
+## Notes and Caveats
 
-- If `msg.pathsToWait` is used instead of setting `Paths`, note that each successive `msg.pathsToWait` will overwrite the previously stored global value. Due to the nature of the timeout, these `Paths` need to be able to be evaluated even after a message has arrived. Using a runtime `msg.pathsToWait` along with different `Correlation topics` may cause unexpected behavior.
+- If the `msg.complete` property is set, the message queue will be evaluated for completion, and then any remaining items in the queue will be immediately expired. This feature can be disabled in the settings, if desired.
 
-- The `timeout` should be padded with a small amount of overhead (i.e., ~5 ms or so) for the time it takes to evaluate all of the messages and conditions. This may become critical under very short timeouts.
+- All values within `Paths topic` must be contained by either `Paths (Wait)` or `Paths (Expire)`, or an error will be thrown. The `Unmatched paths` error notification can be disabled within the settings.
 
-## Example 1: Wait 5000ms for input from 2 flows (in any order)
+- If `msg.pathsToWait` is used instead of setting `Paths (Wait)`, note that each successive `msg.pathsToWait` will overwrite the previously stored global value. Due to the nature of the timeout, `Paths (Wait)` needs to be evaluated even after a message has arrived. Changing the value of `msg.pathsToWait` between messages may cause unexpected behavior.
 
-- A custom property, like `msg.topic`, can be used as the **Correlation topic**.
+- `Timeout` should be padded with a small amount of overhead (i.e., ~5-10 ms or so) for the time it takes to evaluate all of the messages and conditions. This may become critical under very short timeouts.
+
+## Example 1: Wait 5 seconds for input from 2 flows (in any order)
 
 <img src="./example1.png" alt="Example 1" title="Example 1" height="250">
 
 ```javascript
-[{"id":"95dcbbf2.e887e8","type":"inject","z":"fb783323.7e308","name":"","topic":"topic1","payload":"{\"brightness\":\"20\"}","payloadType":"json","repeat":"","crontab":"","once":false,"onceDelay":"","x":1630,"y":1400,"wires":[["8873e640.5610e8"]]},{"id":"406ee55d.cda44c","type":"debug","z":"fb783323.7e308","name":"","active":true,"tosidebar":true,"console":false,"complete":"true","x":2290,"y":1260,"wires":[]},{"id":"7e5d55cd.bc182c","type":"inject","z":"fb783323.7e308","name":"","topic":"topic1","payload":"","payloadType":"date","repeat":"","crontab":"","once":false,"onceDelay":"","x":1640,"y":1320,"wires":[["30c4bfcb.fde0f"]]},{"id":"295d3fe9.ce6da","type":"debug","z":"fb783323.7e308","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"payload","targetType":"msg","x":2290,"y":1420,"wires":[]},{"id":"30c4bfcb.fde0f","type":"change","z":"fb783323.7e308","name":"Set path_1","rules":[{"t":"set","p":"paths","pt":"msg","to":"path_1","tot":"str"}],"action":"","property":"","from":"","to":"","reg":false,"x":1890,"y":1320,"wires":[["1555120c.6d25be"]]},{"id":"8873e640.5610e8","type":"change","z":"fb783323.7e308","name":"Set path_2","rules":[{"t":"set","p":"paths","pt":"msg","to":"path_2","tot":"str"}],"action":"","property":"","from":"","to":"","reg":false,"x":1890,"y":1400,"wires":[["1555120c.6d25be"]]},{"id":"1555120c.6d25be","type":"join-wait","z":"fb783323.7e308","name":"","paths":"[\"path_1\", \"path_2\"]","pathTopic":"paths","pathTopicType":"msg","correlationTopic":"topic","correlationTopicType":"msg","timeout":"5000","exactOrder":"false","firstMsg":"true","mapPayload":"true","x":2100,"y":1340,"wires":[["406ee55d.cda44c"],["295d3fe9.ce6da"]]},{"id":"1d08ce54.3daa92","type":"comment","z":"fb783323.7e308","name":"(optional) expired messages","info":"","x":2340,"y":1460,"wires":[]}]
+[{"id":"7382168d.c47858","type":"inject","z":"fb783323.7e308","name":"","topic":"topic1","payload":"{\"brightness\":\"20\"}","payloadType":"json","repeat":"","crontab":"","once":false,"onceDelay":"","x":950,"y":1460,"wires":[["93c1545b.dca6f8"]]},{"id":"3b8f6807.956d78","type":"debug","z":"fb783323.7e308","name":"","active":true,"tosidebar":true,"console":false,"complete":"true","x":1610,"y":1320,"wires":[]},{"id":"5866d421.7eb66c","type":"inject","z":"fb783323.7e308","name":"","topic":"topic1","payload":"","payloadType":"date","repeat":"","crontab":"","once":false,"onceDelay":"","x":960,"y":1380,"wires":[["8d0b69cc.b2b228"]]},{"id":"337256a2.04446a","type":"debug","z":"fb783323.7e308","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"payload","targetType":"msg","x":1610,"y":1480,"wires":[]},{"id":"8d0b69cc.b2b228","type":"change","z":"fb783323.7e308","name":"Set path_1","rules":[{"t":"set","p":"paths","pt":"msg","to":"path_1","tot":"str"}],"action":"","property":"","from":"","to":"","reg":false,"x":1210,"y":1380,"wires":[["959a4717.0b5138"]]},{"id":"93c1545b.dca6f8","type":"change","z":"fb783323.7e308","name":"Set path_2","rules":[{"t":"set","p":"paths","pt":"msg","to":"path_2","tot":"str"}],"action":"","property":"","from":"","to":"","reg":false,"x":1210,"y":1460,"wires":[["959a4717.0b5138"]]},{"id":"959a4717.0b5138","type":"join-wait","z":"fb783323.7e308","name":"","paths":"[\"path_1\", \"path_2\"]","pathsToExpire":"","ignoreUnmatched":false,"pathTopic":"paths","pathTopicType":"msg","correlationTopic":"","correlationTopicType":"msg","timeout":"5","timeoutUnits":"1000","exactOrder":"false","firstMsg":"true","mapPayload":"true","disableComplete":false,"x":1420,"y":1400,"wires":[["3b8f6807.956d78"],["337256a2.04446a"]]},{"id":"6ae4802.e40238","type":"comment","z":"fb783323.7e308","name":"(optional) expired messages","info":"","x":1660,"y":1520,"wires":[]}]
 ```
 
-## Example 2: Wait 5000ms for input from a split flow (in any order); one message does not arrive in time
+## Example 2: Wait 5 seconds for input from a split flow (in any order); one message does not arrive in time
 
-- `_msgid` can be used as the **Correlation topic**, so that flows from split queues can be tracked.
+- `_msgid` is used as the **Correlation topic**, so that flows from split queues can be tracked.
 
 <img src="./example2.png" alt="Example 2" title="Example 2" height="250">
 
 ```javascript
-[{"id":"406ee55d.cda44c","type":"debug","z":"fb783323.7e308","name":"","active":true,"tosidebar":true,"console":false,"complete":"true","x":2290,"y":1260,"wires":[]},{"id":"7e5d55cd.bc182c","type":"inject","z":"fb783323.7e308","name":"","topic":"","payload":"","payloadType":"date","repeat":"","crontab":"","once":false,"onceDelay":"","x":1500,"y":1320,"wires":[["30c4bfcb.fde0f","ceab1b9c.ffdfe8","f43ddb51.4db478"]]},{"id":"295d3fe9.ce6da","type":"debug","z":"fb783323.7e308","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"payload","targetType":"msg","x":2290,"y":1420,"wires":[]},{"id":"30c4bfcb.fde0f","type":"change","z":"fb783323.7e308","name":"Set path_1","rules":[{"t":"set","p":"paths","pt":"msg","to":"path_1","tot":"str"},{"t":"set","p":"payload","pt":"msg","to":"true","tot":"bool"}],"action":"","property":"","from":"","to":"","reg":false,"x":1890,"y":1320,"wires":[["1555120c.6d25be"]]},{"id":"8873e640.5610e8","type":"change","z":"fb783323.7e308","name":"Set path_2","rules":[{"t":"set","p":"paths","pt":"msg","to":"path_2","tot":"str"}],"action":"","property":"","from":"","to":"","reg":false,"x":1890,"y":1400,"wires":[["1555120c.6d25be"]]},{"id":"1555120c.6d25be","type":"join-wait","z":"fb783323.7e308","name":"","paths":"[\"path_1\", \"path_2\"]","pathTopic":"paths","pathTopicType":"msg","correlationTopic":"_msgid","correlationTopicType":"msg","timeout":"5000","exactOrder":"false","firstMsg":"true","mapPayload":"true","x":2100,"y":1340,"wires":[["406ee55d.cda44c"],["295d3fe9.ce6da"]]},{"id":"1d08ce54.3daa92","type":"comment","z":"fb783323.7e308","name":"(optional) expired messages","info":"","x":2340,"y":1460,"wires":[]},{"id":"ceab1b9c.ffdfe8","type":"delay","z":"fb783323.7e308","name":"","pauseType":"delay","timeout":"4","timeoutUnits":"seconds","rate":"1","nbRateUnits":"1","rateUnits":"second","randomFirst":"1","randomLast":"5","randomUnits":"seconds","drop":false,"x":1700,"y":1400,"wires":[["8873e640.5610e8"]]},{"id":"f43ddb51.4db478","type":"delay","z":"fb783323.7e308","name":"","pauseType":"delay","timeout":"7","timeoutUnits":"seconds","rate":"1","nbRateUnits":"1","rateUnits":"second","randomFirst":"1","randomLast":"5","randomUnits":"seconds","drop":false,"x":1700,"y":1460,"wires":[["8873e640.5610e8"]]}]
+[{"id":"c5aae6a2.78f4d8","type":"debug","z":"fb783323.7e308","name":"","active":true,"tosidebar":true,"console":false,"complete":"true","x":1590,"y":1440,"wires":[]},{"id":"4644d839.170ac8","type":"inject","z":"fb783323.7e308","name":"","topic":"","payload":"","payloadType":"date","repeat":"","crontab":"","once":false,"onceDelay":"","x":800,"y":1500,"wires":[["f785671e.2f1ac8","2869e698.5a1daa","373d1571.a4d5fa"]]},{"id":"3ed2d37b.3a852c","type":"debug","z":"fb783323.7e308","name":"","active":true,"tosidebar":true,"console":false,"tostatus":false,"complete":"payload","targetType":"msg","x":1590,"y":1600,"wires":[]},{"id":"f785671e.2f1ac8","type":"change","z":"fb783323.7e308","name":"Set path_1","rules":[{"t":"set","p":"paths","pt":"msg","to":"path_1","tot":"str"},{"t":"set","p":"payload","pt":"msg","to":"true","tot":"bool"}],"action":"","property":"","from":"","to":"","reg":false,"x":1190,"y":1500,"wires":[["c492296e.f80428"]]},{"id":"84493c9a.b98f9","type":"change","z":"fb783323.7e308","name":"Set path_2","rules":[{"t":"set","p":"paths","pt":"msg","to":"path_2","tot":"str"}],"action":"","property":"","from":"","to":"","reg":false,"x":1190,"y":1580,"wires":[["c492296e.f80428"]]},{"id":"c492296e.f80428","type":"join-wait","z":"fb783323.7e308","name":"","paths":"[\"path_1\", \"path_2\"]","pathsToExpire":"","pathTopic":"paths","pathTopicType":"msg","correlationTopic":"_msgid","correlationTopicType":"msg","timeout":"5","timeoutUnits":"1000","exactOrder":"false","firstMsg":"true","mapPayload":"true","x":1400,"y":1520,"wires":[["c5aae6a2.78f4d8"],["3ed2d37b.3a852c"]]},{"id":"a73abdd0.1bd6","type":"comment","z":"fb783323.7e308","name":"(optional) expired messages","info":"","x":1640,"y":1640,"wires":[]},{"id":"2869e698.5a1daa","type":"delay","z":"fb783323.7e308","name":"","pauseType":"delay","timeout":"4","timeoutUnits":"seconds","rate":"1","nbRateUnits":"1","rateUnits":"second","randomFirst":"1","randomLast":"5","randomUnits":"seconds","drop":false,"x":1000,"y":1580,"wires":[["84493c9a.b98f9"]]},{"id":"373d1571.a4d5fa","type":"delay","z":"fb783323.7e308","name":"","pauseType":"delay","timeout":"7","timeoutUnits":"seconds","rate":"1","nbRateUnits":"1","rateUnits":"second","randomFirst":"1","randomLast":"5","randomUnits":"seconds","drop":false,"x":1000,"y":1640,"wires":[["84493c9a.b98f9"]]}]
 ```
 
 ## :question: Get Help
@@ -75,7 +85,7 @@ For bug reports and feature requests, open issues. :bug:
 First of all, install [Node-RED](http://nodered.org/docs/getting-started/installation)
 
 ```sh
-# Then open  the user data directory `~/.node-red`  and install the package
+# Then open the user data directory `~/.node-red` and install the package
 $ cd ~/.node-red
 $ npm install node-red-contrib-join-wait
 ```
