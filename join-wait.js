@@ -84,9 +84,9 @@ module.exports = function(RED) {
             }
 
             const pathKeys = Object.keys(msg[node.pathTopic]);
-            const hasExpirePath = node.pathsToExpire && findOne(pathKeys, node.pathsToExpire);
+            const hasExpirePath = node.pathsToExpire && findOnePath(pathKeys, node.pathsToExpire);
 
-            if (!hasExpirePath && !findOne(pathKeys, node.pathsToWait)) {
+            if (!hasExpirePath && !findOnePath(pathKeys, node.pathsToWait)) {
                 if (!node.ignoreUnmatched) {
                     node.error(`join-wait msg.${node.pathTopic}["${pathKeys}"] doesn't exist in pathsToWait or pathsToExpire!`, [msg, null]);
                 }
@@ -132,7 +132,7 @@ module.exports = function(RED) {
             }
         });
 
-        function findOne(haystack, arr) {
+        function findOnePath(haystack, arr) {
             return haystack.some(function(p) {
                 return arr.includes(p);
             });
