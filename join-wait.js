@@ -83,10 +83,12 @@ module.exports = function(RED) {
                 return;
             }
 
-            const hasExpirePath = hasAnyExpirePath(msg);
-            if (!hasExpirePath && !hasAnyPathToWait(msg)) {
+            const pathKeys = Object.keys(msg[node.pathTopic]);
+            const hasExpirePath = node.pathsToExpire && findOne(pathKeys, node.pathsToExpire);
+
+            if (!hasExpirePath && !findOne(pathKeys, node.pathsToWait)) {
                 if (!node.ignoreUnmatched) {
-                    node.error(`join-wait msg.${node.pathTopic}["${Object.keys(msg[node.pathTopic])}"] doesn't exist in pathsToWait or pathsToExpire!`, [msg, null]);
+                    node.error(`join-wait msg.${node.pathTopic}["${pathKeys}"] doesn't exist in pathsToWait or pathsToExpire!`, [msg, null]);
                 }
                 return;
             }
@@ -184,16 +186,6 @@ module.exports = function(RED) {
             }).reduce(function(a, b) {
                 return Object.assign(a, b);
             }, {});
-        }
-
-        function hasAnyPathToWait(msg) {
-            const pathKeys = Object.keys(msg[node.pathTopic]);
-            return findOne(pathKeys, node.pathsToWait);
-        }
-
-        function hasAnyExpirePath(msg) {
-            const pathKeys = Object.keys(msg[node.pathTopic]);
-            return node.pathsToExpire && findOne(pathKeys, node.pathsToExpire);
         }
 
         function resetQueue(topic, sendExpired) {
