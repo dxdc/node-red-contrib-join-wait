@@ -123,9 +123,9 @@ module.exports = function(RED) {
             const pathData = getReceivedPaths(topic);
             if (findAllPaths(Object.keys(pathData), node.pathsToWait, node.exactOrder)) {
                 const num = (node.firstMsg) ? 0 : node.paths[topic].queue.length - 1;
-                let msg = node.paths[topic].queue[num][1];
-                msg[node.pathTopic] = pathData;
-                node.send([msg, null]);
+                let merged = node.paths[topic].queue[num][1];
+                merged[node.pathTopic] = pathData;
+                node.send([merged, null]);
 
                 resetQueue(topic, false);
             } else if (!node.disableComplete && Object.prototype.hasOwnProperty.call(msg, 'complete')) {
