@@ -38,14 +38,14 @@ module.exports = function(RED) {
         this.ignoreUnmatched = config.ignoreUnmatched;
         this.disableComplete = config.disableComplete;
 
-        this.paths = [];
+        this.paths = {};
         let node = this;
 
         node.on('close', function(removed, done) {
-            node.paths.forEach(function() {
-                clearTimeout(this.timeOut);
-            });
-            node.paths = [];
+            for (const key in node.paths) {
+                clearTimeout(node.paths[key].timeOut);
+                delete node.paths[key];
+            }
             done();
         });
 
@@ -106,9 +106,10 @@ module.exports = function(RED) {
                 topic = (node.topic) ? RED.util.evaluateNodeProperty(node.topic, node.topicType, node, msg) : '_join-wait-node';
             }
 
-            if (!node.paths[topic] || typeof node.paths[topic] !== 'object') {
-                node.paths[topic] = {};
-                node.paths[topic].queue = [];
+            if (!Object.prototype.hasOwnProperty.call(node.paths, topic)) {
+                node.paths[topic] = {
+                    'queue': []
+                };
                 makeNewTimeout(topic, node.timeout);
             }
 
