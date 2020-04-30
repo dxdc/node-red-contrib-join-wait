@@ -1,5 +1,10 @@
 # Node RED join-wait
 
+[![mit license](https://badgen.net/badge/license/MIT/red)](https://github.com/dxdc/node-red-contrib-join-wait/blob/master/LICENSE)
+[![npm](https://badgen.net/npm/v/node-red-contrib-join-wait)](https://www.npmjs.com/package/node-red-contrib-join-wait)
+[![npm](https://badgen.net/npm/dt/node-red-contrib-join-wait)](https://www.npmjs.com/package/node-red-contrib-join-wait)
+[![Donate](https://badgen.net/badge/Donate/PayPal/91BE09)](https://paypal.me/ddcaspi)
+
 This Node-RED module waits for incoming messages from different input paths to arrive within a fixed time window.
 
 > Node-RED is a tool for wiring together hardware devices, APIs and online services in new and interesting ways.
