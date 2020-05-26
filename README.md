@@ -29,6 +29,10 @@ Memory is managed to delete objects after they reach the `Timeout`.
 
 > This can also be configured at runtime by passing an array using `msg.pathsToExpire`.
 
+- If the `Use regex` option is enabled, each item in the Paths array will be treated as a regular expression.
+
+> This can also be configured at runtime by passing `msg.useRegex` as a boolean.
+
 - `Paths topic` must be set to a `msg` property, which is used to check each flow to see if all of the elements in `Paths (Wait)` are matched. This can be `msg.topic`, `msg.paths`, etc. If this is not specified, `msg.paths` is the default.
 
 Note that `Paths topic` can be set in one of two ways:
@@ -54,6 +58,8 @@ Note that `Paths topic` can be set in one of two ways:
 > In the event that multiple messages arrive in this time interval with the same `Paths (Wait)`, only the data from the latest item is returned. For instance, if `Paths (Wait)` = `["path_1", "path_2", "path_3"]`, the `*` indicates which messages are used in this sequence: `["path_1", "path_2", "path_1", "path_2", "path_1"*, "path_2"*, "path_3"*]`. These additional messages will **not** be expired.
 
 ## Notes and Caveats
+
+- If the `regex` option is enabled, each path will be treated as a regular expression. So, `["^path\d+$"]` would match any path1, path2, path3, etc. Note that `^$` are not required, and if omitted, would just perform a partial match. For example `["path\d+"]` would match "my_path1_test". This property can also be set at runtime by passing `msg.useRegex`.
 
 - If the `msg.complete` property is set, the message queue will be evaluated for completion, and then any remaining items in the queue will be immediately expired. This feature can be disabled in the settings, if desired.
 

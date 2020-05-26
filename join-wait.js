@@ -43,6 +43,8 @@ module.exports = function(RED) {
         this.timeout = (Number(config.timeout) || 15000) * (Number(config.timeoutUnits) || 1);
         this.firstMsg = (config.firstMsg === 'true');
         this.mapPayload = (config.mapPayload === 'true');
+
+        this.useRegex = config.useRegex === true;
         this.ignoreUnmatched = config.ignoreUnmatched === true;
         this.disableComplete = config.disableComplete === true;
 
@@ -79,22 +81,38 @@ module.exports = function(RED) {
                 return;
             }
 
-            node.pathsToWait = msg.pathsToWait || node.pathsToWait;
+            node.pathsToWait = msg.pathsToWait || node.pathsToWait; // update global setting
             if (!node.pathsToWait && !Array.isArray(node.pathsToWait)) {
                 node.error('join-wait pathsToWait must be a defined array.', [msg, null]);
                 return;
             }
+            let pathsToWait = Object.assign([], node.pathsToWait);
+            let pathsToExpire = false;
 
-            node.pathsToExpire = msg.pathsToExpire || node.pathsToExpire;
-            if (node.pathsToExpire && !Array.isArray(node.pathsToExpire)) {
-                node.error('join-wait pathsToExpire must be undefined or an array.', [msg, null]);
-                return;
+            node.pathsToExpire = msg.pathsToExpire || node.pathsToExpire; // update global setting
+            if (node.pathsToExpire) {
+                if (!Array.isArray(node.pathsToExpire)) {
+                    node.error('join-wait pathsToExpire must be undefined or an array.', [msg, null]);
+                    return;
+                }
+
+                pathsToExpire = Object.assign([], node.pathsToExpire);
+            }
+
+            node.useRegex = Object.prototype.hasOwnProperty.call(msg, 'useRegex') ? msg.useRegex === true : node.useRegex; // update global setting
+            if (node.useRegex) {
+                try {
+                    pathsToWait = convertToRegex(pathsToWait);
+                    pathsToExpire = convertToRegex(pathsToExpire);
+                } catch (err) {
+                    node.error(`join-wait.regex-expr ${err.message}`, null);
+                }
             }
 
             const pathKeys = Object.keys(msg[node.pathTopic]);
-            const hasExpirePath = node.pathsToExpire && findOnePath(pathKeys, node.pathsToExpire);
+            const hasExpirePath = pathsToExpire && findOnePath(pathKeys, pathsToExpire, node.useRegex);
 
-            if (!hasExpirePath && !findOnePath(pathKeys, node.pathsToWait)) {
+            if (!hasExpirePath && !findOnePath(pathKeys, pathsToWait, node.useRegex)) {
                 if (!node.ignoreUnmatched) {
                     node.error(`join-wait msg.${node.pathTopic}["${pathKeys}"] doesn't exist in pathsToWait or pathsToExpire!`, [msg, null]);
                 }
@@ -129,7 +147,7 @@ module.exports = function(RED) {
             }
 
             const pathData = getReceivedPaths(topic);
-            if (findAllPaths(Object.keys(pathData), node.pathsToWait, node.exactOrder)) {
+            if (findAllPaths(Object.keys(pathData), pathsToWait, node.exactOrder, node.useRegex)) {
                 const num = (node.firstMsg) ? 0 : node.paths[topic].queue.length - 1;
                 let merged = node.paths[topic].queue[num][1];
                 merged[node.pathTopic] = pathData;
@@ -141,23 +159,50 @@ module.exports = function(RED) {
             }
         });
 
-        function findOnePath(haystack, arr) {
+        function convertToRegex(arr) {
+            if (!Array.isArray(arr)) {
+                return arr;
+            }
+
+            return arr.map(function(pattern) {
+                return new RegExp(pattern);
+            });
+        }
+
+        function regexIndexOf(arr, pattern) {
+            let result = -1;
+            arr.some(function(p, i) {
+                if (pattern.test(p)) {
+                    result = i;
+                    return true;
+                }
+            });
+            return result;
+        }
+
         function hasDuplicatePath(arr) {
             return arr.some(function(p, index) {
                 return arr.indexOf(p) !== index;
             });
         }
 
+        function findOnePath(haystack, arr, useRegex) {
             return haystack.some(function(p) {
-                return arr.includes(p);
+                if (useRegex) {
+                    return arr.some(function(pattern) {
+                        return pattern.test(p);
+                    });
+                } else {
+                    return arr.includes(p);
+                }
             });
         }
 
-        function findAllPaths(haystack, arr, exact) {
+        function findAllPaths(haystack, arr, exact, useRegex) {
             const found = [];
 
             return arr.every(function(p, index) {
-                const val = haystack.indexOf(p);
+                const val = useRegex ? regexIndexOf(haystack, p) : haystack.indexOf(p);
                 if (val === -1) {
                     return false;
                 }

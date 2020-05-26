@@ -8,6 +8,11 @@
         <input type="text" id="node-input-pathsToExpire" placeholder="[&quot;not_path_3&quot;, &quot;not_path_4&quot;]">
     </div>
     <div class="form-row">
+        <label for="node-input-useRegex">Use regex</label>
+        <label for="node-input-useRegex" style="width:70%">
+        <input type="checkbox" id="node-input-useRegex" style="display:inline-block; width:22px; vertical-align:baseline;">Interpret paths as regex</label>
+    </div>
+    <div class="form-row">
         <label for="node-input-pathTopic"><i class="fa fa-bookmark-o"></i> Paths topic</label>
         <input type="text" id="node-input-pathTopic" placeholder="paths">
         <input type="hidden" id="node-input-pathTopicType">
@@ -113,6 +118,9 @@
                     }
                     return false;
                 }
+            },
+            useRegex: {
+                value: false
             },
             ignoreUnmatched: {
                 value: false
@@ -222,6 +230,8 @@
     <p><code>Merged data</code> defines how the data from <code>msg.paths</code> (or, another designed <code>Paths topic</code>) will be returned. Either, it can be merged in its original form, or, it can be overwritten with each respective <code>msg.payload</code>. This merged data is then appended to the <code>Base message</code>. In the event that multiple messages arrive in this time interval with the same <code>Paths (Wait)</code>, only the data from the latest item is returned. For instance, if <code>Paths (Wait)</code> = <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;path_3&quot;]</code>, the <code>*</code> indicates which messages are used in this sequence: <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;path_1&quot;, &quot;path_2&quot;, &quot;path_1&quot;*, &quot;path_2&quot;*, &quot;path_3&quot;*]</code>. These additional messages will <b></b> be expired.</p>
 
     <h3>Notes and Caveats</h3>
+
+    <p>If the <code>regex</code> option is enabled, each path will be treated as a regular expression. So, <code>[&quot;^path\d+$&quot;]</code> would match any path1, path2, path3, etc. Note that <code>^$</code> are not required, and if omitted, would just perform a partial match. For example <code>[&quot;path\d+&quot;]</code> would match &quot;my_path1_test&quot;. This property can also be set at runtime by passing <code>msg.useRegex</code>.</p>
 
     <p>If the <code>msg.complete</code> property is set, the message queue will be evaluated for completion, and then any remaining items in the queue will be immediately expired. This feature can be disabled in the settings, if desired.</p>
 
