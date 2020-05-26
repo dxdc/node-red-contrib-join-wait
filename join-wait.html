@@ -84,10 +84,15 @@
                     }
                     try {
                         const json = JSON.parse(v);
-                        return Array.isArray(json) && json.length > 0;
+                        if (Array.isArray(json) && json.length > 0) {
+							return !json.some(function(p, index) {
+								return json.indexOf(p) !== index;
+							});
+                        }
                     } catch (err) {
-                        return false;
+                        //
                     }
+                    return false;
                 }
             },
             pathsToExpire: {
@@ -98,10 +103,15 @@
                     }
                     try {
                         const json = JSON.parse(v);
-                        return Array.isArray(json);
+                        if (Array.isArray(json) && json.length > 0) {
+							return !json.some(function(p, index) {
+								return json.indexOf(p) !== index;
+							});
+                        }
                     } catch (err) {
-                        return false;
+                        //
                     }
+                    return false;
                 }
             },
             ignoreUnmatched: {
@@ -191,9 +201,9 @@
 
     <h3>Details</h3>
 
-    <p>Each item in the <code>Paths (Wait)</code> array corresponds with an input path to wait for. E.g., <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;other_path&quot;]</code>. This can also be configured at runtime by passing an array using <code>msg.pathsToWait</code>.</p>
+    <p>Each item in the <code>Paths (Wait)</code> array corresponds with an input path to wait for. E.g., <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;other_path&quot;]</code>. This can also be configured at runtime by passing an array using <code>msg.pathsToWait</code>. Each item must have a unique name.</p>
 
-    <p>Each item in the <code>Paths (Expire)</code> array corresponds with an input path that will immediately expire all messages in the queue without further processing. This acts as a reset. This can also be configured at runtime by passing an array using <code>msg.pathsToExpire</code>.</p>
+    <p>Each item in the <code>Paths (Expire)</code> array corresponds with an input path that will immediately expire all messages in the queue without further processing. This acts as a reset. This can also be configured at runtime by passing an array using <code>msg.pathsToExpire</code>. Each item must have a unique name.</p>
 
     <p><code>Paths topic</code> must be set to a <code>msg</code> property, which is used to check each flow to see if all of the elements in <code>Paths (Wait)</code> are matched. This can be <code>msg.topic</code>, <code>msg.paths</code>, etc. If this is not specified, <code>msg.paths</code> is the default.</p>
 

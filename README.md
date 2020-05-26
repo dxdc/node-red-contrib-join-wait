@@ -21,11 +21,11 @@ Memory is managed to delete objects after they reach the `Timeout`.
 
 ## Configuration
 
-- Each item in the `Paths (Wait)` array corresponds with an input path to wait for. E.g., `["path_1", "path_2", "other_path"]`.
+- Each item in the `Paths (Wait)` array corresponds with an input path to wait for. E.g., `["path_1", "path_2", "other_path"]`. Each path item must have a unique name.
 
 > This can also be configured at runtime by passing an array using `msg.pathsToWait`.
 
-- Each item in the `Paths (Expire)` array corresponds with an input path that will immediately expire all messages in the queue without further processing. This acts as a reset.
+- Each item in the `Paths (Expire)` array corresponds with an input path that will immediately expire all messages in the queue without further processing. This acts as a reset. Each path item must have a unique name.
 
 > This can also be configured at runtime by passing an array using `msg.pathsToExpire`.
 

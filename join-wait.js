@@ -7,12 +7,20 @@ module.exports = function(RED) {
 
         try {
             this.pathsToWait = JSON.parse(config.paths);
+            if (hasDuplicatePath(this.pathsToWait)) {
+                this.error('join-wait pathsToWait cannot have duplicate entries');
+                return;
+            }
         } catch (err) {
             this.pathsToWait = false;
         }
 
         try {
             this.pathsToExpire = JSON.parse(config.pathsToExpire);
+            if (hasDuplicatePath(this.pathsToExpire)) {
+                this.error('join-wait pathsToExpire cannot have duplicate entries');
+                return;
+            }
         } catch (err) {
             this.pathsToExpire = false;
         }
@@ -134,6 +142,12 @@ module.exports = function(RED) {
         });
 
         function findOnePath(haystack, arr) {
+        function hasDuplicatePath(arr) {
+            return arr.some(function(p, index) {
+                return arr.indexOf(p) !== index;
+            });
+        }
+
             return haystack.some(function(p) {
                 return arr.includes(p);
             });
