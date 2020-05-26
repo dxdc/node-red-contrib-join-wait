@@ -43,8 +43,8 @@ module.exports = function(RED) {
         this.timeout = (Number(config.timeout) || 15000) * (Number(config.timeoutUnits) || 1);
         this.firstMsg = (config.firstMsg === 'true');
         this.mapPayload = (config.mapPayload === 'true');
-        this.ignoreUnmatched = config.ignoreUnmatched;
-        this.disableComplete = config.disableComplete;
+        this.ignoreUnmatched = config.ignoreUnmatched === true;
+        this.disableComplete = config.disableComplete === true;
 
         this.paths = {};
         let node = this;
@@ -187,7 +187,7 @@ module.exports = function(RED) {
                 node.send([null, expired[1]]);
             }
 
-            return (node.paths[topic].queue.length == 0);
+            return (node.paths[topic].queue.length === 0);
         }
 
         function getReceivedPaths(topic) {
