@@ -53,8 +53,10 @@ module.exports = function(RED) {
 
         node.on('close', function(removed, done) {
             for (const key in node.paths) {
-                clearTimeout(node.paths[key].timeOut);
-                delete node.paths[key];
+                if (Object.prototype.hasOwnProperty.call(node.paths, key)) {
+                    clearTimeout(node.paths[key].timeOut);
+                    delete node.paths[key];
+                }
             }
             done();
         });
