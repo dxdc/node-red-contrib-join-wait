@@ -1,8 +1,8 @@
-module.exports = function(RED) {
+module.exports = function (RED) {
     'use strict';
     let jsonata = require('jsonata');
 
-    RED.nodes.registerType('join-wait', function(config) {
+    RED.nodes.registerType('join-wait', function (config) {
         RED.nodes.createNode(this, config);
 
         try {
@@ -25,7 +25,7 @@ module.exports = function(RED) {
             this.pathsToExpire = false;
         }
 
-        this.exactOrder = (config.exactOrder === 'true');
+        this.exactOrder = config.exactOrder === 'true';
         this.topic = config.correlationTopic || false;
         this.topicType = config.correlationTopicType;
         if (this.topicType === 'jsonata') {
@@ -41,8 +41,8 @@ module.exports = function(RED) {
         // this.pathTopicType = config.pathTopicType;
 
         this.timeout = (Number(config.timeout) || 15000) * (Number(config.timeoutUnits) || 1);
-        this.firstMsg = (config.firstMsg === 'true');
-        this.mapPayload = (config.mapPayload === 'true');
+        this.firstMsg = config.firstMsg === 'true';
+        this.mapPayload = config.mapPayload === 'true';
 
         this.useRegex = config.useRegex === true;
         this.ignoreUnmatched = config.ignoreUnmatched === true;
@@ -51,7 +51,7 @@ module.exports = function(RED) {
         this.paths = {};
         let node = this;
 
-        node.on('close', function(removed, done) {
+        node.on('close', function (removed, done) {
             for (const key in node.paths) {
                 if (Object.prototype.hasOwnProperty.call(node.paths, key)) {
                     clearTimeout(node.paths[key].timeOut);
@@ -61,25 +61,30 @@ module.exports = function(RED) {
             done();
         });
 
-        node.on('input', function(msg) {
-
+        node.on('input', function (msg) {
             //
             // error checking
             //
 
             if (!msg[node.pathTopic]) {
-                node.error(`join-wait "msg.${node.pathTopic}" is undefined, must be msg.${node.pathTopic}["path"]=value.`, [msg, null]);
+                node.error(
+                    `join-wait "msg.${node.pathTopic}" is undefined, must be msg.${node.pathTopic}["path"]=value.`,
+                    [msg, null],
+                );
                 return;
             }
 
             if (typeof msg[node.pathTopic] === 'string') {
                 msg[node.pathTopic] = {
-                    [msg[node.pathTopic]]: true
+                    [msg[node.pathTopic]]: true,
                 };
             }
 
             if (typeof msg[node.pathTopic] !== 'object') {
-                node.error(`join-wait "msg.${node.pathTopic}" must be a string or an object, e.g., msg.${node.pathTopic}["path"] = value.`, [msg, null]);
+                node.error(
+                    `join-wait "msg.${node.pathTopic}" must be a string or an object, e.g., msg.${node.pathTopic}["path"] = value.`,
+                    [msg, null],
+                );
                 return;
             }
 
@@ -101,7 +106,9 @@ module.exports = function(RED) {
                 pathsToExpire = Object.assign([], node.pathsToExpire);
             }
 
-            node.useRegex = Object.prototype.hasOwnProperty.call(msg, 'useRegex') ? msg.useRegex === true : node.useRegex; // update global setting
+            node.useRegex = Object.prototype.hasOwnProperty.call(msg, 'useRegex')
+                ? msg.useRegex === true
+                : node.useRegex; // update global setting
             if (node.useRegex) {
                 try {
                     pathsToWait = convertToRegex(pathsToWait);
@@ -116,7 +123,10 @@ module.exports = function(RED) {
 
             if (!hasExpirePath && !findOnePath(pathKeys, pathsToWait, node.useRegex)) {
                 if (!node.ignoreUnmatched) {
-                    node.error(`join-wait msg.${node.pathTopic}["${pathKeys}"] doesn't exist in pathsToWait or pathsToExpire!`, [msg, null]);
+                    node.error(
+                        `join-wait msg.${node.pathTopic}["${pathKeys}"] doesn't exist in pathsToWait or pathsToExpire!`,
+                        [msg, null],
+                    );
                 }
                 return;
             }
@@ -128,15 +138,17 @@ module.exports = function(RED) {
             let topic;
             if (node.topicType === 'jsonata') {
                 topic = node.topic.evaluate({
-                    msg: msg
+                    msg: msg,
                 });
             } else {
-                topic = (node.topic) ? RED.util.evaluateNodeProperty(node.topic, node.topicType, node, msg) : '_join-wait-node';
+                topic = node.topic
+                    ? RED.util.evaluateNodeProperty(node.topic, node.topicType, node, msg)
+                    : '_join-wait-node';
             }
 
             if (!Object.prototype.hasOwnProperty.call(node.paths, topic)) {
                 node.paths[topic] = {
-                    'queue': []
+                    queue: [],
                 };
                 makeNewTimeout(topic, node.timeout);
             }
@@ -150,7 +162,7 @@ module.exports = function(RED) {
 
             const pathData = getReceivedPaths(topic);
             if (findAllPaths(Object.keys(pathData), pathsToWait, node.exactOrder, node.useRegex)) {
-                const num = (node.firstMsg) ? 0 : node.paths[topic].queue.length - 1;
+                const num = node.firstMsg ? 0 : node.paths[topic].queue.length - 1;
                 let merged = node.paths[topic].queue[num][1];
                 merged[node.pathTopic] = pathData;
                 node.send([merged, null]);
@@ -166,14 +178,14 @@ module.exports = function(RED) {
                 return arr;
             }
 
-            return arr.map(function(pattern) {
+            return arr.map(function (pattern) {
                 return new RegExp(pattern);
             });
         }
 
         function regexIndexOf(arr, pattern) {
             let result = -1;
-            arr.some(function(p, i) {
+            arr.some(function (p, i) {
                 if (pattern.test(p)) {
                     result = i;
                     return true;
@@ -183,15 +195,15 @@ module.exports = function(RED) {
         }
 
         function hasDuplicatePath(arr) {
-            return arr.some(function(p, index) {
+            return arr.some(function (p, index) {
                 return arr.indexOf(p) !== index;
             });
         }
 
         function findOnePath(haystack, arr, useRegex) {
-            return haystack.some(function(p) {
+            return haystack.some(function (p) {
                 if (useRegex) {
-                    return arr.some(function(pattern) {
+                    return arr.some(function (pattern) {
                         return pattern.test(p);
                     });
                 } else {
@@ -203,7 +215,7 @@ module.exports = function(RED) {
         function findAllPaths(haystack, arr, exact, useRegex) {
             const found = [];
 
-            return arr.every(function(p, index) {
+            return arr.every(function (p, index) {
                 const val = useRegex ? regexIndexOf(haystack, p) : haystack.indexOf(p);
                 if (val === -1) {
                     return false;
@@ -211,16 +223,16 @@ module.exports = function(RED) {
 
                 found.push(val);
                 const lastIndex = index - 1;
-                return (exact && lastIndex in found) ? (val > found[lastIndex]) : true;
+                return exact && lastIndex in found ? val > found[lastIndex] : true;
             });
         }
 
         function makeNewTimeout(topic, timeout) {
-            node.paths[topic].timeOut = setTimeout(function() {
+            node.paths[topic].timeOut = setTimeout(function () {
                 if (removeExpiredByTime(topic)) {
                     resetQueue(topic, true);
                 } else {
-                    const nextCheck = (node.paths[topic].queue[0][0] + node.timeout) - Date.now();
+                    const nextCheck = node.paths[topic].queue[0][0] + node.timeout - Date.now();
                     makeNewTimeout(topic, nextCheck);
                 }
             }, timeout);
@@ -228,31 +240,32 @@ module.exports = function(RED) {
 
         function removeExpiredByTime(topic) {
             const minStartTime = Date.now() - node.timeout;
-            while (node.paths[topic].queue.length > 0 &&
-                node.paths[topic].queue[0][0] < minStartTime) {
+            while (node.paths[topic].queue.length > 0 && node.paths[topic].queue[0][0] < minStartTime) {
                 const expired = node.paths[topic].queue.shift();
                 node.send([null, expired[1]]);
             }
 
-            return (node.paths[topic].queue.length === 0);
+            return node.paths[topic].queue.length === 0;
         }
 
         function getReceivedPaths(topic) {
-            return node.paths[topic].queue.map(function(q) {
-                if (node.mapPayload) {
-                    Object.keys(q[1][node.pathTopic]).forEach(function(item) {
-                        q[1][node.pathTopic][item] = q[1].payload;
-                    });
-                }
-                return q[1][node.pathTopic];
-            }).reduce(function(a, b) {
-                return Object.assign(a, b);
-            }, {});
+            return node.paths[topic].queue
+                .map(function (q) {
+                    if (node.mapPayload) {
+                        Object.keys(q[1][node.pathTopic]).forEach(function (item) {
+                            q[1][node.pathTopic][item] = q[1].payload;
+                        });
+                    }
+                    return q[1][node.pathTopic];
+                })
+                .reduce(function (a, b) {
+                    return Object.assign(a, b);
+                }, {});
         }
 
         function resetQueue(topic, sendExpired) {
             if (sendExpired) {
-                node.paths[topic].queue.forEach(function(q) {
+                node.paths[topic].queue.forEach(function (q) {
                     node.send([null, q[1]]);
                 });
             }
