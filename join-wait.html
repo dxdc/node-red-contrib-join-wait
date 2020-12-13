@@ -1,5 +1,10 @@
 <script type="text/x-red" data-template-name="join-wait">
     <div class="form-row">
+        <label for="node-input-pathTopic"><i class="fa fa-bookmark-o"></i> Paths topic</label>
+        <input type="text" id="node-input-pathTopic" placeholder="topic">
+        <input type="hidden" id="node-input-pathTopicType">
+    </div>
+    <div class="form-row">
         <label for="node-input-paths"><i class="fa fa-code-fork"></i> Paths (Wait)</label>
         <input type="text" id="node-input-paths" placeholder="[&quot;path_1&quot;, &quot;path_2&quot;]">
     </div>
@@ -10,12 +15,12 @@
     <div class="form-row">
         <label for="node-input-useRegex">Use regex</label>
         <label for="node-input-useRegex" style="width:70%">
-        <input type="checkbox" id="node-input-useRegex" style="display:inline-block; width:22px; vertical-align:baseline;">Interpret paths as regex</label>
+        <input type="checkbox" id="node-input-useRegex" style="display:inline-block; width:22px; vertical-align:baseline;">Interpret path names as regex</label>
     </div>
     <div class="form-row">
-        <label for="node-input-pathTopic"><i class="fa fa-bookmark-o"></i> Paths topic</label>
-        <input type="text" id="node-input-pathTopic" placeholder="paths">
-        <input type="hidden" id="node-input-pathTopicType">
+        <label for="node-input-warnUnmatched">Unmatched paths</label>
+        <label for="node-input-warnUnmatched" style="width:70%">
+        <input type="checkbox" id="node-input-warnUnmatched" style="display:inline-block; width:22px; vertical-align:baseline;">Warn on unmatched path</label>
     </div>
     <div class="form-row">
         <label for="node-input-correlationTopic"><i class="fa fa-bookmark-o"></i> Correlation topic</label>
@@ -55,14 +60,9 @@
         </select>
     </div>
     <div class="form-row">
-        <label for="node-input-ignoreUnmatched"><i class="fa fa-exclamation-triangle"></i> Unmatched paths</label>
-        <label for="node-input-ignoreUnmatched" style="width:70%">
-        <input type="checkbox" id="node-input-ignoreUnmatched" style="display:inline-block; width:22px; vertical-align:baseline;">Ignore unmatched paths</label>
-    </div>
-    <div class="form-row">
         <label for="node-input-disableComplete"><i class="fa fa-refresh"></i> Reset queue</label>
         <label for="node-input-disableComplete" style="width:70%">
-        <input type="checkbox" id="node-input-disableComplete" style="display:inline-block; width:22px; vertical-align:baseline;">Disable use of <code>msg.complete</code></label>
+        <input type="checkbox" id="node-input-disableComplete" style="display:inline-block; width:22px; vertical-align:baseline;">Ignore <code>msg.complete</code></label>
     </div>
     <div class="form-row">
         <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
@@ -79,122 +79,124 @@
         color: '#8baac7',
         defaults: {
             name: {
-                value: ''
+                value: '',
             },
             paths: {
                 value: '',
-                validate: function(v) {
+                validate: function (v) {
                     if (v === '') {
                         return true;
                     }
                     try {
                         const json = JSON.parse(v);
-                        if (Array.isArray(json) && json.length > 0) {
-							return !json.some(function(p, index) {
-								return json.indexOf(p) !== index;
-							});
-                        }
+                        return Array.isArray(json) && json.length > 0;
                     } catch (err) {
-                        //
+                        console.log(err);
                     }
                     return false;
-                }
+                },
             },
             pathsToExpire: {
                 value: '',
-                validate: function(v) {
+                validate: function (v) {
                     if (v === '') {
                         return true;
                     }
                     try {
                         const json = JSON.parse(v);
                         if (Array.isArray(json) && json.length > 0) {
-							return !json.some(function(p, index) {
-								return json.indexOf(p) !== index;
-							});
+                            return !json.some(function (p, index) {
+                                return json.indexOf(p) !== index;
+                            });
                         }
                     } catch (err) {
-                        //
+                        console.log(err);
                     }
                     return false;
-                }
+                },
             },
             useRegex: {
-                value: false
+                value: false,
             },
-            ignoreUnmatched: {
-                value: false
+            warnUnmatched: {
+                value: true,
             },
             pathTopic: {
-                value: 'paths'
+                value: 'topic',
             },
             pathTopicType: {
-                value: 'msg'
+                value: 'msg',
             },
             correlationTopic: {
-                value: ''
+                value: '',
             },
             correlationTopicType: {
-                value: 'msg'
+                value: 'undefined',
             },
             timeout: {
                 value: 15000,
                 required: true,
-                validate: function(v) {
+                validate: function (v) {
                     return (Number(v) || 0) > 0;
-                }
+                },
             },
             timeoutUnits: {
                 value: 1,
-                validate: RED.validators.number()
+                validate: RED.validators.number(),
             },
             exactOrder: {
                 value: 'false',
-                required: true
+                required: true,
             },
             firstMsg: {
                 value: 'true',
-                required: true
+                required: true,
             },
             mapPayload: {
                 value: 'false',
-                required: true
+                required: true,
             },
             disableComplete: {
-                value: false
-            }
+                value: false,
+            },
         },
         inputs: 1,
         outputs: 2,
         outputLabels: ['success', 'expired'],
         icon: 'node-red-contrib-join-wait.png',
-        label: function() {
+        label: function () {
             return this.name || 'join-wait';
         },
-        labelStyle: function() {
-            return (this.name) ? 'node_label_italic' : '';
+        labelStyle: function () {
+            return this.name ? 'node_label_italic' : '';
         },
-        oneditprepare: function() {
+        oneditprepare: function () {
             var node = this;
             var previousValueType = {
                 value: 'prev',
                 label: this._('join-wait.previous'),
-                hasValue: false
+                hasValue: false,
             };
-            $('#node-input-correlationTopic').typedInput({
-                default: this.correlationTopicType || 'msg',
-                typeField: $('#node-input-correlationTopicType'),
-                types: ['msg', 'flow', 'global', 'jsonata']
-            });
             $('#node-input-pathTopic').typedInput({
                 default: this.pathTopicType || 'msg',
                 typeField: $('#node-input-pathTopicType'),
-                types: ['msg']
+                types: ['msg', 'flow', 'global'],
+            });
+            $('#node-input-correlationTopic').typedInput({
+                default: this.correlationTopicType || types.Undefined,
+                typeField: $('#node-input-correlationTopicType'),
+                types: [
+                    { value: 'undefined', label: RED._('common.type.undefined'), hasValue: false },
+                    'msg',
+                    'flow',
+                    'global',
+                    'jsonata',
+                ],
             });
             $('#node-input-timeout').spinner({
-                min: 1
+                min: 1,
             });
-        }
+        },
     });
 </script>
 
@@ -209,7 +211,7 @@
 
     <h3>Details</h3>
 
-    <p>Each item in the <code>Paths (Wait)</code> array corresponds with an input path to wait for. E.g., <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;other_path&quot;]</code>. This can also be configured at runtime by passing an array using <code>msg.pathsToWait</code>. Each item must have a unique name.</p>
+    <p>Each item in the <code>Paths (Wait)</code> array corresponds with an input path to wait for. E.g., <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;other_path&quot;]</code>. This can also be configured at runtime by passing an array using <code>msg.pathsToWait</code>.</p>
 
     <p>Each item in the <code>Paths (Expire)</code> array corresponds with an input path that will immediately expire all messages in the queue without further processing. This acts as a reset. This can also be configured at runtime by passing an array using <code>msg.pathsToExpire</code>. Each item must have a unique name.</p>
 
@@ -230,6 +232,12 @@
     <p><code>Merged data</code> defines how the data from <code>msg.paths</code> (or, another designed <code>Paths topic</code>) will be returned. Either, it can be merged in its original form, or, it can be overwritten with each respective <code>msg.payload</code>. This merged data is then appended to the <code>Base message</code>. In the event that multiple messages arrive in this time interval with the same <code>Paths (Wait)</code>, only the data from the latest item is returned. For instance, if <code>Paths (Wait)</code> = <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;path_3&quot;]</code>, the <code>*</code> indicates which messages are used in this sequence: <code>[&quot;path_1&quot;, &quot;path_2&quot;, &quot;path_1&quot;, &quot;path_2&quot;, &quot;path_1&quot;*, &quot;path_2&quot;*, &quot;path_3&quot;*]</code>. These additional messages will <b></b> be expired.</p>
 
     <h3>Notes and Caveats</h3>
+
+    <p>There is support for repeated paths. For example, <code>["path_1", "path_2", "path_1", "path_2"]</code>.</p>
+
+    <p>If any order is used, <code>Paths (Wait)</code> is evaluated to determine the count for repeated paths. If *regex* is used, paths will be counted in a greedy fashion from left to right. For example, <code>["path_[12]", "path_2"]</code> would never complete because all instances of "path_1" and "path_2" would be counted for the first path.</p>
+
+    <p>If exact order is used, note that unexpected paths would still be tolerated.</p>
 
     <p>If the <code>regex</code> option is enabled, each path will be treated as a regular expression. So, <code>[&quot;^path\d+$&quot;]</code> would match any path1, path2, path3, etc. Note that <code>^$</code> are not required, and if omitted, would just perform a partial match. For example <code>[&quot;path\d+&quot;]</code> would match &quot;my_path1_test&quot;. This property can also be set at runtime by passing <code>msg.useRegex</code>.</p>
 

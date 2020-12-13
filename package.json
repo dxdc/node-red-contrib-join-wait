@@ -4,13 +4,13 @@
     "url": "https://github.com/dxdc/node-red-contrib-join-wait/issues"
   },
   "dependencies": {
-    "jsonata": "^1.8.3"
+    "jsonata": "^1.8.4"
   },
   "description": "Waits for incoming messages from different input paths to arrive within a fixed time window.",
   "devDependencies": {
-    "@types/node-red": "^0.20.1",
-    "eslint": "^7.1.0",
-    "prettier": "^2.0.5",
+    "@types/node-red": "^1.1.1",
+    "eslint": "^7.15.0",
+    "prettier": "^2.2.1",
     "rimraf": "^3.0.2"
   },
   "homepage": "https://github.com/dxdc/node-red-contrib-join-wait#readme",
@@ -45,9 +45,9 @@
     "url": "git+https://github.com/dxdc/node-red-contrib-join-wait.git"
   },
   "scripts": {
-    "format": "prettier --write *.js",
+    "format": "prettier --write *.js *.html *.md",
     "lint": "eslint *.js",
     "test": "echo \"Error: no test specified\" && exit"
   },
-  "version": "0.3.5"
+  "version": "0.4.0"
 }
