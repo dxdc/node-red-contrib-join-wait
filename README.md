@@ -62,7 +62,7 @@ Note that `Paths topic` can be set in one of two ways:
 
 -   There is support for repeated paths. For example, `["path_1", "path_2", "path_1", "path_2"]`.
 
-> -   If any order is used, `Paths (Wait)` is evaluated to determine the count for repeated paths. If *regex* is used, paths will be counted in a greedy fashion from left to right. For example, `["path_[12]", "path_2"]` would never complete because all instances of "path_1" and "path_2" would be counted for the first path.
+> -   If any order is used, `Paths (Wait)` is evaluated to determine the count for repeated paths. If _regex_ is used, paths will be counted in a greedy fashion from left to right. For example, `["path_[12]", "path_2"]` would never complete because all instances of "path_1" and "path_2" would be counted for the first path.
 
 > -   If exact order is used, note that unexpected paths would still be tolerated.
 
@@ -208,6 +208,7 @@ Note that `Paths topic` can be set in one of two ways:
     }
 ]
 ```
+
 </details>
 
 ## Example 2: Wait 5 seconds for input from a split flow (in any order); one message does not arrive in time
@@ -367,6 +368,7 @@ Note that `Paths topic` can be set in one of two ways:
     }
 ]
 ```
+
 </details>
 
 ## Example 3: Wait 5 seconds for input from Events 1A and 1B; Wait 5 seconds for input from Events 2A and 2B; Wait 1 minute for both event groups to complete.
@@ -671,6 +673,7 @@ Note that `Paths topic` can be set in one of two ways:
     }
 ]
 ```
+
 </details>
 
 ## Example 4: Wait 10 seconds for Event 1 to fire 3 times, followed by Event 3. Must be in this exact order.
@@ -825,6 +828,7 @@ Note that `Paths topic` can be set in one of two ways:
     }
 ]
 ```
+
 </details>
 
 ## Example 5: Wait 10 seconds for the exact event order "path_1", "path_2", "path_1", "path_2".
@@ -996,6 +1000,7 @@ Note that `Paths topic` can be set in one of two ways:
     }
 ]
 ```
+
 </details>
 
 ## Example 6: Wait 10 seconds for two "path_1" events and one "path_2" event in any order.
@@ -1183,6 +1188,7 @@ Note that `Paths topic` can be set in one of two ways:
     }
 ]
 ```
+
 </details>
 
 ## :question: Get Help
