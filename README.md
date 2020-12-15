@@ -66,6 +66,8 @@ Note that `Paths topic` can be set in one of two ways:
 
 > -   If exact order is used, note that unexpected paths would still be tolerated.
 
+> -   In the case of duplicate paths, only the data from the latest path(s) will be used.
+
 -   If the `regex` option is enabled, each path will be treated as a regular expression. So, `["^path\d+$"]` would match any path1, path2, path3, etc. Note that `^$` are not required, and if omitted, would just perform a partial match. For example `["path\d+"]` would match "my_path1_test". This property can also be set at runtime by passing `msg.useRegex`.
 
 -   If the `msg.complete` property is set, the message queue will be evaluated for completion, and then any remaining items in the queue will be immediately expired. This feature can be disabled in the settings, if desired.

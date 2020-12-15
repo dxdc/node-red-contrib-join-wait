@@ -10,6 +10,9 @@
   "devDependencies": {
     "@types/node-red": "^1.1.1",
     "eslint": "^7.15.0",
+    "eslint-plugin-mocha": "^8.0.0",
+    "node-red": "^1.2.6",
+    "node-red-node-test-helper": "^0.2.5",
     "prettier": "^2.2.1",
     "rimraf": "^3.0.2"
   },
@@ -45,9 +48,9 @@
     "url": "git+https://github.com/dxdc/node-red-contrib-join-wait.git"
   },
   "scripts": {
-    "format": "prettier --write *.js *.html *.md",
-    "lint": "eslint *.js",
-    "test": "echo \"Error: no test specified\" && exit"
+    "format": "npx prettier --write {.,test}/*.js *.html *.md",
+    "lint": "npx eslint {.,test}/*.js",
+    "test": "npx mocha \"test/**/*_spec.js\""
   },
   "version": "0.4.0"
 }

@@ -42,7 +42,7 @@
         <label for="node-input-exactOrder"><i class="fa fa-sort"></i> Sequence order</label>
         <select id="node-input-exactOrder" style="width:70%; margin-right:5px;">
             <option value="false">Any order</option>
-            <option value="true">Exact order</option>
+            <option value="true">Exact order (strict)</option>
         </select>
     </div>
     <div class="form-row">
@@ -238,6 +238,8 @@
     <p>If any order is used, <code>Paths (Wait)</code> is evaluated to determine the count for repeated paths. If *regex* is used, paths will be counted in a greedy fashion from left to right. For example, <code>["path_[12]", "path_2"]</code> would never complete because all instances of "path_1" and "path_2" would be counted for the first path.</p>
 
     <p>If exact order is used, note that unexpected paths would still be tolerated.</p>
+
+    <p>In the case of duplicate paths, only the data from the latest path(s) will be used.</p>
 
     <p>If the <code>regex</code> option is enabled, each path will be treated as a regular expression. So, <code>[&quot;^path\d+$&quot;]</code> would match any path1, path2, path3, etc. Note that <code>^$</code> are not required, and if omitted, would just perform a partial match. For example <code>[&quot;path\d+&quot;]</code> would match &quot;my_path1_test&quot;. This property can also be set at runtime by passing <code>msg.useRegex</code>.</p>
 
