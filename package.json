@@ -52,5 +52,5 @@
     "lint": "npx eslint {.,test}/*.js",
     "test": "npx mocha \"test/**/*_spec.js\""
   },
-  "version": "0.4.5"
+  "version": "0.5.0"
 }

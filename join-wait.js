@@ -195,14 +195,12 @@ module.exports = function (RED) {
                 return Object.keys(q);
             });
 
-            if (node.exactOrder) {
-                const numRemaining = findAllPathsExactOrder(allPathKeys, pathsToWait, node.useRegex);
-                if (numRemaining !== false) {
-                    clearQueueExpiredByOrder(topic, numRemaining) || clearQueueIfCompleteIsSet(topic, msg);
-                    return;
-                }
-            } else if (!findAllPaths(allPathKeys, pathsToWait, node.useRegex)) {
-                clearQueueIfCompleteIsSet(topic, msg);
+            const numToKeep = node.exactOrder
+                ? findAllPathsExactOrder(allPathKeys, pathsToWait, node.useRegex)
+                : findAllPathsAnyOrder(allPathKeys, pathsToWait, node.useRegex);
+
+            if (numToKeep !== null) {
+                clearQueueIfCompleteIsSet(topic, msg) || clearQueueExpiredByOrder(topic, numToKeep);
                 return;
             }
 
@@ -225,6 +223,15 @@ module.exports = function (RED) {
             return arr.map(function (pattern) {
                 return new RegExp(pattern);
             });
+        }
+
+        function flatten(arr) {
+            return [].concat.apply([], arr);
+        }
+
+        function condenseWithCount(arr) {
+            arr = arr.reduce((map, key) => map.set(key, (map.get(key) || 0) + 1), new Map());
+            return Array.from(arr, ([name, value]) => ({ name, value }));
         }
 
         function regexIndexOf(arr, needle) {
@@ -257,25 +264,50 @@ module.exports = function (RED) {
             });
         }
 
-        function findAllPaths(arr, waitPaths, useRegex) {
-            const map = waitPaths.reduce((map, key) => map.set(key, (map.get(key) || 0) + 1), new Map());
-            const mapArray = Array.from(map, ([name, value]) => ({ name, value }));
+        function findAllPathsAnyOrder(arr, waitPaths, useRegex) {
+            const waitMap = condenseWithCount(waitPaths);
+            const keys = flatten(arr);
+            const result = countPathsAnyOrder(keys, waitMap, useRegex);
 
+            const allPathsFound = result.every(function (p) {
+                return p === true;
+            });
+
+            if (allPathsFound) {
+                return null;
+            }
+
+            const originalString = result.toString();
+
+            for (let i = 0; i < arr.length; i++) {
+                const newKeys = flatten(arr.slice(i + 1));
+                const expireByOne = countPathsAnyOrder(newKeys, waitMap, useRegex);
+                if (originalString !== expireByOne.toString()) {
+                    return arr.length - i;
+                }
+            }
+
+            return 0;
+        }
+
+        function countPathsAnyOrder(keys, waitMap, useRegex) {
             let used = [];
 
-            return mapArray.every(function (p) {
-                const count = [].concat.apply([], arr).filter(function (val, i) {
+            return waitMap.map(function (p) {
+                const count = keys.filter(function (val, i) {
                     if (used.indexOf(i) !== -1) {
                         return false;
                     }
-
                     const found = useRegex ? p.name.test(val) : p.name === val;
-                    if (found) {
-                        used.push(i);
+                    if (!found) {
+                        return false;
                     }
-                    return found;
+
+                    used.push(i);
+                    return true;
                 }).length;
-                return count >= p.value;
+
+                return count < p.value ? count : true;
             });
         }
 
@@ -312,7 +344,7 @@ module.exports = function (RED) {
                     }
 
                     if (index === waitPaths.length - 1) {
-                        return false;
+                        return null;
                     }
 
                     marker = index;
@@ -363,21 +395,21 @@ module.exports = function (RED) {
             return false;
         }
 
-        function clearQueueExpiredByOrder(topic, numRemain) {
-            return _queueDeletionHandler(topic, true, false, numRemain);
+        function clearQueueExpiredByOrder(topic, numToKeep) {
+            return _queueDeletionHandler(topic, true, false, numToKeep);
         }
 
         function clearQueueExpiredByTime(topic) {
             return _queueDeletionHandler(topic, true, true, 0);
         }
 
-        function _queueDeletionHandler(topic, sendExpired, checkExpireTime, numRemain) {
+        function _queueDeletionHandler(topic, sendExpired, checkExpireTime, numToKeep) {
             const group = node.paths[topic];
             const isExpired = function () {
                 return checkExpireTime ? group.queue[0][0] < Date.now() - node.timeout : true;
             };
 
-            while (group.queue.length > numRemain && isExpired()) {
+            while (group.queue.length > numToKeep && isExpired()) {
                 const expired = group.queue.shift();
                 if (sendExpired) {
                     const msg = Object.assign(expired[1], { paths: expired[2] });

@@ -57,6 +57,93 @@ describe('wait paths node', function () {
         });
     });
 
+    it('should handle any order flow (with expired)', function (done) {
+        var opts = { paths: '["path_1", "path_1", "path_2", "path_2"]' };
+        var flow = flows.getDefault(opts);
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            var n2 = helper.getNode('n2');
+            var n3 = helper.getNode('n3');
+            n3.on('input', function (msg) {
+                msg.should.have.property('payload', 'payload1');
+                msg.should.have.property('paths').eql({ path_1: 'payload1' });
+                done();
+            });
+            n2.on('input', function (msg) {
+                done(msg);
+            });
+            n1.receive({ paths: 'path_1', payload: 'payload1' });
+            n1.receive({ paths: 'path_1', payload: 'payload1' });
+            n1.receive({ paths: 'path_1', payload: 'payload1' });
+        });
+    });
+
+    it('should handle any order flow (with expired #2)', function (done) {
+        var opts = { paths: '["path_1", "path_1", "path_2", "path_2", "path_3"]' };
+        var flow = flows.getDefault(opts);
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            var n2 = helper.getNode('n2');
+            var n3 = helper.getNode('n3');
+            n3.on('input', function (msg) {
+                done(msg);
+            });
+            n2.on('input', function (msg) {
+                msg.should.have.property('payload', 'payload3');
+                msg.should.have.property('paths').eql({ path_1: 'payload1', path_2: 'payload2', path_3: 'payload3' });
+                var logEvents = helper.log().args.filter(function (evt) {
+                    return evt[0].type == 'join-wait';
+                });
+                logEvents.should.have.length(0);
+                done();
+            });
+            n1.receive({ paths: 'path_3', payload: 'payload3' });
+            n1.receive({ paths: 'path_2', payload: 'payload2' });
+            n1.receive({ paths: 'path_1', payload: 'payload1' });
+            n1.receive({ paths: 'path_2', payload: 'payload2' });
+            n1.receive({ paths: 'path_2', payload: 'payload2' });
+            n1.receive({ paths: 'path_1', payload: 'payload1' });
+        });
+    });
+
+    it('should handle any order flow (with expired #3)', function (done) {
+        var opts = { paths: '["path_1", "path_1", "path_2", "path_2", "path_3"]' };
+        var flow = flows.getDefault(opts);
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            var n2 = helper.getNode('n2');
+            var n3 = helper.getNode('n3');
+
+            var counter = 0;
+
+            n3.on('input', function () {
+                counter++;
+            });
+            n2.on('input', function (msg) {
+                counter.should.be.eql(1);
+                msg.should.have.property('payload', 'payload1');
+                msg.should.have.property('paths').eql({ path_1: 'payload1', path_2: 'payload2', path_3: 'payload3' });
+                var logEvents = helper.log().args.filter(function (evt) {
+                    return evt[0].type == 'join-wait';
+                });
+                logEvents.should.have.length(0);
+                done();
+            });
+            n1.receive({ paths: 'path_1', payload: 'payload1' });
+            n1.receive({ paths: 'path_1', payload: 'payload1' });
+            n1.receive({ paths: { path_1: 'payload1', path_2: 'payload2' }, payload: 'payload1' });
+            n1.receive({ paths: 'path_2', payload: 'payload2' });
+            n1.receive({ paths: 'path_2', payload: 'payload2' });
+            n1.receive({ paths: 'path_2', payload: 'payload2' });
+            n1.receive({ paths: 'path_2', payload: 'payload2' });
+            n1.receive({ paths: 'path_2', payload: 'payload2' });
+            n1.receive({ paths: 'path_3', payload: 'payload3' });
+        });
+    });
+
     it('should handle any order flow - 2 correlation topics', function (done) {
         var opts = { correlationTopic: 'group', correlationTopicType: 'msg' };
         var flow = flows.getDefault(opts);
