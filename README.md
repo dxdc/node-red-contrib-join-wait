@@ -56,7 +56,7 @@ Note that `Paths topic` can be set in one of two ways:
 
 -   `Merged data` defines how the data from `msg.paths` (or, another designed `Paths topic`) will be returned. Either, it can be merged in its original form, or, it can be overwritten with each respective `msg.payload`. This merged data is then appended to the `Base message`.
 
-> In the event that multiple messages arrive in this time interval with the same `Paths (Wait)`, only the data from the latest item is returned. For instance, if `Paths (Wait)` = `["path_1", "path_2", "path_3"]`, the `*` indicates which messages are used in this sequence: `["path_1", "path_2", "path_1", "path_2", "path_1"*, "path_2"*, "path_3"*]`. These additional messages will **not** be expired.
+> In the event that multiple messages arrive in this time interval with the same `Paths (Wait)`, only the data from the latest item is returned. For instance, if `Paths (Wait)` = `["path_1", "path_2", "path_3"]`, the `*` indicates which messages are used in this sequence: `["path_1", "path_2", "path_1", "path_2", "path_1"*, "path_2"*, "path_3"*]`. These additional messages (not starred) **will** be expired.
 
 ## Notes and Caveats
 
