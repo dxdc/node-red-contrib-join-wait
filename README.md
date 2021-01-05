@@ -1219,6 +1219,8 @@ I try to reply to everyone needing help using these projects. Obviously, this ta
 
 -   Starring and sharing the projects you like :rocket:
 -   [![PayPal][badge_paypal]][paypal-donations] **PayPal**— You can make one-time donations via PayPal.
+-   **Venmo**— You can make one-time donations via Venmo.
+    ![Venmo QR Code](/docs/venmo.png?raw=true 'Venmo QR Code')
 -   **Bitcoin**— You can send me Bitcoin at this address: `33sT6xw3tZWAdP2oL4ygbH5TVpVMfk9VW7`
 
 ## Credits
