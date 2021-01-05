@@ -1,8 +1,8 @@
 module.exports = function (RED) {
     'use strict';
-    let jsonata = require('jsonata');
+    const jsonata = require('jsonata');
 
-    RED.nodes.registerType('join-wait', function (config) {
+    function JoinWaitNode(config) {
         RED.nodes.createNode(this, config);
 
         try {
@@ -14,7 +14,7 @@ module.exports = function (RED) {
         try {
             this.pathsToExpire = JSON.parse(config.pathsToExpire);
             if (hasDuplicatePath(this.pathsToExpire)) {
-                this.error('join-wait pathsToExpire cannot have duplicate entries');
+                this.error(`join-wait pathsToExpire cannot have duplicate entries: ${this.pathsToExpire}`);
                 return;
             }
         } catch (err) {
@@ -49,6 +49,7 @@ module.exports = function (RED) {
 
         node.on('close', function (removed, done) {
             for (const key in node.paths) {
+                /* istanbul ignore else */
                 if (Object.prototype.hasOwnProperty.call(node.paths, key)) {
                     clearTimeout(node.paths[key].timeOut);
                     delete node.paths[key];
@@ -106,7 +107,7 @@ module.exports = function (RED) {
             }
 
             if (pathsToExpire && hasDuplicatePath(pathsToExpire)) {
-                node.error('join-wait pathsToExpire cannot have duplicate entries: ${pathsToExpire}');
+                node.error(`join-wait pathsToExpire cannot have duplicate entries: ${pathsToExpire}`);
                 return;
             }
 
@@ -124,27 +125,26 @@ module.exports = function (RED) {
             }
 
             const pathKeys = Object.keys(pathTopic);
+            const foundKeys = pathKeys.filter(function (val) {
+                return pathsToWait.some(function (p) {
+                    return node.useRegex ? p.test(val) : p === val;
+                });
+            });
+
             const hasExpirePath = pathsToExpire && findAnyPath(pathKeys, pathsToExpire, node.useRegex);
 
             if (!hasExpirePath) {
-                const foundKeys = pathKeys.filter(function (val) {
-                    return pathsToWait.some(function (p) {
-                        return node.useRegex ? p.test(val) : p === val;
-                    });
+                const notFoundKeys = pathKeys.filter(function (val) {
+                    return foundKeys.indexOf(val) === -1;
                 });
 
-                if (node.warnUnmatched) {
-                    const unmatched = pathKeys
-                        .filter(function (val) {
-                            return foundKeys.indexOf(val) === -1;
+                if (node.warnUnmatched && notFoundKeys.length > 0) {
+                    const unmatchedStr = notFoundKeys
+                        .map(function (key) {
+                            return `${pathTopicName}["${key}"]`;
                         })
-                        .join('", "');
-                    if (unmatched) {
-                        node.warn(
-                            `join-wait ${pathTopicName}["${unmatched}"] doesn't exist in pathsToWait or pathsToExpire!`,
-                            [msg, null],
-                        );
-                    }
+                        .join(', ');
+                    node.warn(`join-wait ${unmatchedStr} doesn't exist in pathsToWait or pathsToExpire!`, [msg, null]);
                 }
 
                 if (foundKeys.length === 0) {
@@ -169,6 +169,8 @@ module.exports = function (RED) {
                 node.error(`join-wait.invalid-expr topic ${err.message}`);
                 return;
             }
+
+            // map payload
 
             if (node.mapPayload) {
                 pathKeys.forEach(function (item) {
@@ -287,6 +289,7 @@ module.exports = function (RED) {
                 }
             }
 
+            /* istanbul ignore next */
             return 0;
         }
 
@@ -324,6 +327,7 @@ module.exports = function (RED) {
                     let index = useRegex ? regexIndexOf(unusedWaitPaths, path) : unusedWaitPaths.indexOf(path);
 
                     if (index === -1) {
+                        /* istanbul ignore else */
                         if (offBy > 0) {
                             index = useRegex ? regexIndexOf(waitPaths, path) : waitPaths.indexOf(path);
                             if (index > 0) {
@@ -425,5 +429,7 @@ module.exports = function (RED) {
             delete node.paths[topic];
             return true;
         }
-    });
+    }
+
+    RED.nodes.registerType('join-wait', JoinWaitNode);
 };
