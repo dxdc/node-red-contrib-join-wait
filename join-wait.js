@@ -1,5 +1,7 @@
 module.exports = function (RED) {
     'use strict';
+    const path = require('path');
+    const storage = require('node-persist');
     const jsonata = require('jsonata');
 
     function JoinWaitNode(config) {
@@ -43,18 +45,46 @@ module.exports = function (RED) {
         this.useRegex = config.useRegex === true;
         this.warnUnmatched = config.warnUnmatched === true;
         this.disableComplete = config.disableComplete === true;
+        this.persistOnRestart = config.persistOnRestart === true;
 
-        this.paths = {};
+        storage.initSync({
+            dir: path.join(RED.settings.userDir, 'join-wait', config.id.toString()),
+            forgiveParseErrors: true,
+        });
+
+        const savedPaths = storage.getItemSync('paths');
+        storage.clear();
+
+        this.paths = config.injectPaths || (savedPaths ? JSON.parse(savedPaths) : {});
         let node = this;
 
-        node.on('close', function (removed, done) {
-            for (const key in node.paths) {
-                /* istanbul ignore else */
-                if (Object.prototype.hasOwnProperty.call(node.paths, key)) {
-                    clearTimeout(node.paths[key].timeOut);
-                    delete node.paths[key];
+        for (const topic in node.paths) {
+            /* istanbul ignore else */
+            if (Object.prototype.hasOwnProperty.call(node.paths, topic)) {
+                if (node.persistOnRestart) {
+                    makeNewQueueTimer(topic, 10);
+                } else {
+                    clearQueueAllNoOutput(topic);
                 }
             }
+        }
+
+        node.on('close', function (removed, done) {
+            for (const topic in node.paths) {
+                /* istanbul ignore else */
+                if (Object.prototype.hasOwnProperty.call(node.paths, topic)) {
+                    clearTimeout(node.paths[topic].timeOut);
+                    /* istanbul ignore else */
+                    if (!node.persistOnRestart) {
+                        clearQueueAllNoOutput(topic);
+                    }
+                }
+            }
+
+            if (node.persistOnRestart) {
+                storage.setItemSync('paths', JSON.stringify(node.paths));
+            }
+
             done();
         });
 

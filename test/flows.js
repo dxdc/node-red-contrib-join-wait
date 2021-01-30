@@ -18,6 +18,7 @@ const Flows = {
                 firstMsg: 'true',
                 mapPayload: 'true',
                 disableComplete: false,
+                persistOnRestart: false,
                 wires: [['n2'], ['n3']],
             },
             { id: 'n2', type: 'helper' },

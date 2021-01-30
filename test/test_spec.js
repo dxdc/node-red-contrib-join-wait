@@ -1,6 +1,7 @@
 // var should = require('should');
+var os = require('os');
 var helper = require('node-red-node-test-helper');
-helper.init(require.resolve('node-red'));
+helper.init(require.resolve('node-red'), { userDir: os.tmpdir() });
 
 var flows = require('./flows');
 var joinWaitNode = require('../join-wait.js');
@@ -822,6 +823,138 @@ describe('wait paths node', function () {
                 done(msg);
             });
             n1.receive({ paths: { path_1: 'payload1', path_2: 'payload2' }, payload: 'payload1' });
+        });
+    });
+
+    it('should expire paths on load', function (done) {
+        var opts = {
+            pathsToExpire: '["path_2"]',
+            injectPaths: {
+                '_join-wait-node': {
+                    queue: [
+                        [
+                            1611966107117,
+                            {
+                                paths: 'path_1',
+                                payload: 'payload1',
+                                _msgid: '8fe56348.20ff2',
+                            },
+                            {
+                                path_1: 'payload1',
+                            },
+                        ],
+
+                        [
+                            1611966107117,
+                            {
+                                paths: 'path_3',
+                                payload: 'payload3',
+                                _msgid: 'cb61c65a.8586a8',
+                            },
+                            {
+                                path_3: 'payload3',
+                            },
+                        ],
+                    ],
+                },
+            },
+        };
+        var flow = flows.getDefault(opts);
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            var n2 = helper.getNode('n2');
+            var n3 = helper.getNode('n3');
+            n3.on('input', function (msg) {
+                msg.should.have.property('payload', 'payload1');
+                msg.should.have.property('paths').eql({ path_2: 'payload1' });
+                var logEvents = helper.log().args.filter(function (evt) {
+                    return evt[0].type == 'join-wait';
+                });
+                logEvents.should.have.length(0);
+                done();
+            });
+            n2.on('input', function (msg) {
+                done(msg);
+            });
+            n1.receive({ paths: { path_2: 'payload2' }, payload: 'payload1' });
+        });
+    });
+
+    it('should not expire paths on load', function (done) {
+        var opts = {
+            pathsToExpire: '["path_2"]',
+            persistOnRestart: true,
+            injectPaths: {
+                '_join-wait-node': {
+                    queue: [
+                        [
+                            1611966107117,
+                            {
+                                paths: 'path_1',
+                                payload: 'payload1',
+                                _msgid: '8fe56348.20ff2',
+                            },
+                            {
+                                path_1: 'payload1',
+                            },
+                        ],
+
+                        [
+                            1611966107117,
+                            {
+                                paths: 'path_3',
+                                payload: 'payload3',
+                                _msgid: 'cb61c65a.8586a8',
+                            },
+                            {
+                                path_3: 'payload3',
+                            },
+                        ],
+                    ],
+                },
+            },
+        };
+        var flow = flows.getDefault(opts);
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            var n2 = helper.getNode('n2');
+            var n3 = helper.getNode('n3');
+
+            var counter = 1;
+
+            n3.on('input', function (msg) {
+                switch (counter) {
+                    case 1: {
+                        msg.should.have.property('payload', 'payload1');
+                        msg.should.have.property('paths').eql({ path_1: 'payload1' });
+                        ++counter;
+                        return;
+                    }
+                    case 2: {
+                        msg.should.have.property('payload', 'payload3');
+                        msg.should.have.property('paths').eql({ path_3: 'payload3' });
+                        ++counter;
+                        return;
+                    }
+                    case 3: {
+                        msg.should.have.property('payload', 'payload1');
+                        msg.should.have.property('paths').eql({ path_2: 'payload1' });
+                        ++counter;
+                    }
+                }
+
+                var logEvents = helper.log().args.filter(function (evt) {
+                    return evt[0].type == 'join-wait';
+                });
+                logEvents.should.have.length(0);
+                done();
+            });
+            n2.on('input', function (msg) {
+                done(msg);
+            });
+            n1.receive({ paths: { path_2: 'payload2' }, payload: 'payload1' });
         });
     });
 
