@@ -55,7 +55,7 @@ module.exports = function (RED) {
         const savedPaths = storage.getItemSync('paths');
         storage.clear();
 
-        this.paths = config.injectPaths || (savedPaths ? JSON.parse(savedPaths) : {});
+        this.paths = savedPaths ? JSON.parse(savedPaths) : {};
         let node = this;
 
         for (const topic in node.paths) {

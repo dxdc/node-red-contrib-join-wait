@@ -1,5 +1,6 @@
 // var should = require('should');
 var os = require('os');
+var path = require('path');
 var helper = require('node-red-node-test-helper');
 helper.init(require.resolve('node-red'), { userDir: os.tmpdir() });
 
@@ -827,37 +828,44 @@ describe('wait paths node', function () {
     });
 
     it('should expire paths on load', function (done) {
+        var storage = require('node-persist');
+        storage.initSync({
+            dir: path.join(os.tmpdir(), 'join-wait', 'n1'),
+            forgiveParseErrors: true,
+        });
+        var data = {
+            '_join-wait-node': {
+                queue: [
+                    [
+                        1611966107117,
+                        {
+                            paths: 'path_1',
+                            payload: 'payload1',
+                            _msgid: '8fe56348.20ff2',
+                        },
+                        {
+                            path_1: 'payload1',
+                        },
+                    ],
+
+                    [
+                        1611966107117,
+                        {
+                            paths: 'path_3',
+                            payload: 'payload3',
+                            _msgid: 'cb61c65a.8586a8',
+                        },
+                        {
+                            path_3: 'payload3',
+                        },
+                    ],
+                ],
+            },
+        };
+        storage.setItemSync('paths', JSON.stringify(data));
+
         var opts = {
             pathsToExpire: '["path_2"]',
-            injectPaths: {
-                '_join-wait-node': {
-                    queue: [
-                        [
-                            1611966107117,
-                            {
-                                paths: 'path_1',
-                                payload: 'payload1',
-                                _msgid: '8fe56348.20ff2',
-                            },
-                            {
-                                path_1: 'payload1',
-                            },
-                        ],
-
-                        [
-                            1611966107117,
-                            {
-                                paths: 'path_3',
-                                payload: 'payload3',
-                                _msgid: 'cb61c65a.8586a8',
-                            },
-                            {
-                                path_3: 'payload3',
-                            },
-                        ],
-                    ],
-                },
-            },
         };
         var flow = flows.getDefault(opts);
 
@@ -872,9 +880,11 @@ describe('wait paths node', function () {
                     return evt[0].type == 'join-wait';
                 });
                 logEvents.should.have.length(0);
+                storage.clear();
                 done();
             });
             n2.on('input', function (msg) {
+                storage.clear();
                 done(msg);
             });
             n1.receive({ paths: { path_2: 'payload2' }, payload: 'payload1' });
@@ -882,38 +892,45 @@ describe('wait paths node', function () {
     });
 
     it('should not expire paths on load', function (done) {
+        var storage = require('node-persist');
+        storage.initSync({
+            dir: path.join(os.tmpdir(), 'join-wait', 'n1'),
+            forgiveParseErrors: true,
+        });
+        var data = {
+            '_join-wait-node': {
+                queue: [
+                    [
+                        1611966107117,
+                        {
+                            paths: 'path_1',
+                            payload: 'payload1',
+                            _msgid: '8fe56348.20ff2',
+                        },
+                        {
+                            path_1: 'payload1',
+                        },
+                    ],
+
+                    [
+                        1611966107117,
+                        {
+                            paths: 'path_3',
+                            payload: 'payload3',
+                            _msgid: 'cb61c65a.8586a8',
+                        },
+                        {
+                            path_3: 'payload3',
+                        },
+                    ],
+                ],
+            },
+        };
+        storage.setItemSync('paths', JSON.stringify(data));
+
         var opts = {
             pathsToExpire: '["path_2"]',
             persistOnRestart: true,
-            injectPaths: {
-                '_join-wait-node': {
-                    queue: [
-                        [
-                            1611966107117,
-                            {
-                                paths: 'path_1',
-                                payload: 'payload1',
-                                _msgid: '8fe56348.20ff2',
-                            },
-                            {
-                                path_1: 'payload1',
-                            },
-                        ],
-
-                        [
-                            1611966107117,
-                            {
-                                paths: 'path_3',
-                                payload: 'payload3',
-                                _msgid: 'cb61c65a.8586a8',
-                            },
-                            {
-                                path_3: 'payload3',
-                            },
-                        ],
-                    ],
-                },
-            },
         };
         var flow = flows.getDefault(opts);
 
@@ -949,9 +966,11 @@ describe('wait paths node', function () {
                     return evt[0].type == 'join-wait';
                 });
                 logEvents.should.have.length(0);
+                storage.clear();
                 done();
             });
             n2.on('input', function (msg) {
+                storage.clear();
                 done(msg);
             });
             n1.receive({ paths: { path_2: 'payload2' }, payload: 'payload1' });
