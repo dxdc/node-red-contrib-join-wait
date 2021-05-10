@@ -10,13 +10,14 @@
   "description": "Waits for incoming messages from different input paths to arrive within a fixed time window.",
   "devDependencies": {
     "@types/node-red": "^1.1.1",
-    "eslint": "^7.23.0",
+    "eslint": "^7.26.0",
     "eslint-plugin-mocha": "^8.1.0",
-    "mocha": "^8.3.2",
-    "node-red": "^1.3.0",
+    "markdown-spellcheck": "^1.3.1",
+    "mocha": "^8.4.0",
+    "node-red": "^1.3.4",
     "node-red-node-test-helper": "^0.2.7",
     "nyc": "^15.1.0",
-    "prettier": "^2.2.1",
+    "prettier": "^2.3.0",
     "rimraf": "^3.0.2"
   },
   "homepage": "https://github.com/dxdc/node-red-contrib-join-wait#readme",
@@ -53,6 +54,7 @@
     "coverage": "nyc npm t",
     "format": "prettier --write {.,test}/*.js *.html *.md",
     "lint": "eslint {.,test}/*.js",
+    "spellcheck": "mdspell -r -n *.md",
     "test": "mocha \"test/**/*_spec.js\""
   },
   "version": "0.5.2"
