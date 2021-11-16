@@ -191,7 +191,7 @@
                 types: ['msg', 'flow', 'global'],
             });
             $('#node-input-correlationTopic').typedInput({
-                default: this.correlationTopicType || types.Undefined,
+                default: this.correlationTopicType || 'undefined',
                 typeField: $('#node-input-correlationTopicType'),
                 types: [
                     { value: 'undefined', label: RED._('common.type.undefined'), hasValue: false },
