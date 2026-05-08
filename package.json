@@ -21,6 +21,7 @@
         "join-wait.html",
         "lib/",
         "icons/",
+        "examples/",
         "LICENSE",
         "README.md",
         "CHANGELOG.md"
@@ -37,7 +38,8 @@
         "version": ">=3.0.0",
         "nodes": {
             "join-wait": "join-wait.js"
-        }
+        },
+        "examples": "examples"
     },
     "dependencies": {
         "jsonata": "^2.0.5"
