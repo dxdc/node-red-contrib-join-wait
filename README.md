@@ -5,14 +5,46 @@
 [![npm downloads](https://img.shields.io/npm/dt/node-red-contrib-join-wait.svg)](https://www.npmjs.com/package/node-red-contrib-join-wait)
 [![license](https://img.shields.io/npm/l/node-red-contrib-join-wait.svg)](LICENSE)
 
-A Node-RED node that waits for a set of related messages to arrive on different
-"paths" within a fixed time window, then emits one merged message. If they
-don't all arrive in time, the partial set is sent to a separate "expired"
-output.
+A Node-RED node that joins related messages across multiple paths within a
+time window — with exact-order matching, regex paths, correlation grouping,
+reset paths, and queue persistence. Coordinate parallel flows, synchronize
+events, and debounce sensors.
 
-Useful when you need to confirm that a sequence of independent events all
-happened before reacting — debouncing motion vs. light state, requiring two
-sensors to agree, batching split flows, etc.
+If all the named paths arrive in time, a merged message is emitted on the
+**success** output. Anything left over goes to the **expired** output for
+optional follow-up.
+
+## Use cases
+
+- **Debounce a motion sensor** when a light turning on/off is also tripping
+  it: only fire if `light_off` then `motion` then `light_on` all arrive
+  within 10 s.
+- **Correlate request lifecycle events** — wait for `request_started` and
+  `request_finished` with the same correlation id and emit one log entry
+  with the duration.
+- **Sensor consensus** — only act when both `door_open` and `vibration`
+  fire within 2 s.
+- **Recombine fanned-out API calls** — join the responses from a
+  `split` flow when each branch tags its result with a known path name.
+- **Watchdog gate** — let `start` plus N progress beats arrive within a
+  window, otherwise route to an alarm flow via the expired output.
+
+## Is this the right node? `join-wait` vs. the stock `join` node
+
+| You need to…                                           | Stock `join` | `join-wait` |
+| ------------------------------------------------------ | :----------: | :---------: |
+| Recombine pieces of a `split` message (`msg.parts`)    |      ✅      |      –      |
+| Concatenate strings, arrays, or buffers                |      ✅      |      –      |
+| Count "any N messages" into a batch                    |      ✅      |      –      |
+| Wait for **specific named** paths within a time window |      –       |     ✅      |
+| Match path names by regex                              |      –       |     ✅      |
+| Require an **exact order** (with repeats)              |      –       |     ✅      |
+| Drain the queue when a "reset" path arrives            |      –       |     ✅      |
+| Group by an arbitrary correlation expression           |      –       |     ✅      |
+
+**Rule of thumb:** if you split a message and want to put it back
+together, use the stock `join`. If you have heterogeneous events from
+different sources and want to coordinate them, use `join-wait`.
 
 ## Quick start
 
