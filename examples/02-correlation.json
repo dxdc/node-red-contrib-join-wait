@@ -1,0 +1,110 @@
+[
+    {
+        "id": "corr-tab",
+        "type": "tab",
+        "label": "join-wait correlation",
+        "disabled": false,
+        "info": "Two parallel orders share a join-wait via msg._msgid.\nOnly messages from the same originating msg get joined."
+    },
+    {
+        "id": "corr-inject",
+        "type": "inject",
+        "z": "corr-tab",
+        "name": "split flow",
+        "props": [{ "p": "payload", "v": "{}", "vt": "json" }],
+        "x": 120,
+        "y": 130,
+        "wires": [["corr-set1", "corr-delay", "corr-set3"]]
+    },
+    {
+        "id": "corr-set1",
+        "type": "change",
+        "z": "corr-tab",
+        "name": "topic = path_1",
+        "rules": [{ "t": "set", "p": "topic", "pt": "msg", "to": "path_1", "tot": "str" }],
+        "x": 320,
+        "y": 80,
+        "wires": [["corr-jw"]]
+    },
+    {
+        "id": "corr-delay",
+        "type": "delay",
+        "z": "corr-tab",
+        "name": "",
+        "pauseType": "delay",
+        "timeout": "1",
+        "timeoutUnits": "seconds",
+        "x": 320,
+        "y": 130,
+        "wires": [["corr-set2"]]
+    },
+    {
+        "id": "corr-set2",
+        "type": "change",
+        "z": "corr-tab",
+        "name": "topic = path_2",
+        "rules": [{ "t": "set", "p": "topic", "pt": "msg", "to": "path_2", "tot": "str" }],
+        "x": 480,
+        "y": 130,
+        "wires": [["corr-jw"]]
+    },
+    {
+        "id": "corr-set3",
+        "type": "change",
+        "z": "corr-tab",
+        "name": "topic = path_3",
+        "rules": [{ "t": "set", "p": "topic", "pt": "msg", "to": "path_3", "tot": "str" }],
+        "x": 320,
+        "y": 180,
+        "wires": [["corr-jw"]]
+    },
+    {
+        "id": "corr-jw",
+        "type": "join-wait",
+        "z": "corr-tab",
+        "name": "group by _msgid",
+        "paths": ["path_1", "path_2", "path_3"],
+        "pathsToExpire": [],
+        "useRegex": false,
+        "warnUnmatched": false,
+        "pathTopic": "topic",
+        "pathTopicType": "msg",
+        "correlationTopic": "_msgid",
+        "correlationTopicType": "msg",
+        "timeout": "10",
+        "timeoutUnits": "1000",
+        "exactOrder": "false",
+        "firstMsg": "true",
+        "mapPayload": "true",
+        "disableComplete": false,
+        "persistOnRestart": false,
+        "persistStore": "",
+        "x": 700,
+        "y": 130,
+        "wires": [["corr-ok"], ["corr-bad"]]
+    },
+    {
+        "id": "corr-ok",
+        "type": "debug",
+        "z": "corr-tab",
+        "name": "joined",
+        "active": true,
+        "tosidebar": true,
+        "complete": "true",
+        "x": 880,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "corr-bad",
+        "type": "debug",
+        "z": "corr-tab",
+        "name": "expired",
+        "active": true,
+        "tosidebar": true,
+        "complete": "true",
+        "x": 880,
+        "y": 160,
+        "wires": []
+    }
+]

@@ -1,0 +1,88 @@
+[
+    {
+        "id": "rst-tab",
+        "type": "tab",
+        "label": "join-wait reset paths",
+        "disabled": false,
+        "info": "If 'reset' arrives before path_1 + path_2, the queue is drained\nto the expired output instead of completing."
+    },
+    {
+        "id": "rst-i1",
+        "type": "inject",
+        "z": "rst-tab",
+        "name": "path_1",
+        "props": [{ "p": "topic", "v": "path_1", "vt": "str" }],
+        "x": 130,
+        "y": 80,
+        "wires": [["rst-jw"]]
+    },
+    {
+        "id": "rst-i2",
+        "type": "inject",
+        "z": "rst-tab",
+        "name": "path_2",
+        "props": [{ "p": "topic", "v": "path_2", "vt": "str" }],
+        "x": 130,
+        "y": 130,
+        "wires": [["rst-jw"]]
+    },
+    {
+        "id": "rst-i3",
+        "type": "inject",
+        "z": "rst-tab",
+        "name": "reset",
+        "props": [{ "p": "topic", "v": "abort", "vt": "str" }],
+        "x": 130,
+        "y": 200,
+        "wires": [["rst-jw"]]
+    },
+    {
+        "id": "rst-jw",
+        "type": "join-wait",
+        "z": "rst-tab",
+        "name": "wait + abort",
+        "paths": ["path_1", "path_2"],
+        "pathsToExpire": ["abort"],
+        "useRegex": false,
+        "warnUnmatched": true,
+        "pathTopic": "topic",
+        "pathTopicType": "msg",
+        "correlationTopic": "",
+        "correlationTopicType": "undefined",
+        "timeout": "10",
+        "timeoutUnits": "1000",
+        "exactOrder": "false",
+        "firstMsg": "true",
+        "mapPayload": "true",
+        "disableComplete": false,
+        "persistOnRestart": false,
+        "persistStore": "",
+        "x": 360,
+        "y": 130,
+        "wires": [["rst-success"], ["rst-expired"]]
+    },
+    {
+        "id": "rst-success",
+        "type": "debug",
+        "z": "rst-tab",
+        "name": "success",
+        "active": true,
+        "tosidebar": true,
+        "complete": "true",
+        "x": 540,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "rst-expired",
+        "type": "debug",
+        "z": "rst-tab",
+        "name": "expired",
+        "active": true,
+        "tosidebar": true,
+        "complete": "true",
+        "x": 540,
+        "y": 160,
+        "wires": []
+    }
+]

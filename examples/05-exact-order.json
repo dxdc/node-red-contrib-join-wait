@@ -1,0 +1,88 @@
+[
+    {
+        "id": "eo-tab",
+        "type": "tab",
+        "label": "join-wait exact order",
+        "disabled": false,
+        "info": "Match the precise sequence start → work → work → end.\nThe `work` step must arrive twice. Out-of-order arrivals are\nexpired."
+    },
+    {
+        "id": "eo-i1",
+        "type": "inject",
+        "z": "eo-tab",
+        "name": "start",
+        "props": [{ "p": "topic", "v": "start", "vt": "str" }],
+        "x": 130,
+        "y": 80,
+        "wires": [["eo-jw"]]
+    },
+    {
+        "id": "eo-i2",
+        "type": "inject",
+        "z": "eo-tab",
+        "name": "work",
+        "props": [{ "p": "topic", "v": "work", "vt": "str" }],
+        "x": 130,
+        "y": 130,
+        "wires": [["eo-jw"]]
+    },
+    {
+        "id": "eo-i3",
+        "type": "inject",
+        "z": "eo-tab",
+        "name": "end",
+        "props": [{ "p": "topic", "v": "end", "vt": "str" }],
+        "x": 130,
+        "y": 180,
+        "wires": [["eo-jw"]]
+    },
+    {
+        "id": "eo-jw",
+        "type": "join-wait",
+        "z": "eo-tab",
+        "name": "exact: start, work, work, end",
+        "paths": ["start", "work", "work", "end"],
+        "pathsToExpire": [],
+        "useRegex": false,
+        "warnUnmatched": false,
+        "pathTopic": "topic",
+        "pathTopicType": "msg",
+        "correlationTopic": "",
+        "correlationTopicType": "undefined",
+        "timeout": "10",
+        "timeoutUnits": "1000",
+        "exactOrder": "true",
+        "firstMsg": "true",
+        "mapPayload": "true",
+        "disableComplete": false,
+        "persistOnRestart": false,
+        "persistStore": "",
+        "x": 410,
+        "y": 130,
+        "wires": [["eo-success"], ["eo-expired"]]
+    },
+    {
+        "id": "eo-success",
+        "type": "debug",
+        "z": "eo-tab",
+        "name": "success",
+        "active": true,
+        "tosidebar": true,
+        "complete": "true",
+        "x": 640,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "eo-expired",
+        "type": "debug",
+        "z": "eo-tab",
+        "name": "expired",
+        "active": true,
+        "tosidebar": true,
+        "complete": "true",
+        "x": 640,
+        "y": 160,
+        "wires": []
+    }
+]

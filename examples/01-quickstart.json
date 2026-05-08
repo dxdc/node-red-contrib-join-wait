@@ -1,0 +1,80 @@
+[
+    {
+        "id": "qs-tab",
+        "type": "tab",
+        "label": "join-wait quickstart",
+        "disabled": false,
+        "info": "Inject path_1 and path_2 within 5s — both reach success.\nInject only one — it goes to expired."
+    },
+    {
+        "id": "qs-i1",
+        "type": "inject",
+        "z": "qs-tab",
+        "name": "path_1",
+        "props": [{ "p": "topic", "v": "path_1", "vt": "str" }, { "p": "payload", "v": "hello-1", "vt": "str" }],
+        "x": 130,
+        "y": 100,
+        "wires": [["qs-jw"]]
+    },
+    {
+        "id": "qs-i2",
+        "type": "inject",
+        "z": "qs-tab",
+        "name": "path_2",
+        "props": [{ "p": "topic", "v": "path_2", "vt": "str" }, { "p": "payload", "v": "hello-2", "vt": "str" }],
+        "x": 130,
+        "y": 160,
+        "wires": [["qs-jw"]]
+    },
+    {
+        "id": "qs-jw",
+        "type": "join-wait",
+        "z": "qs-tab",
+        "name": "wait 5s",
+        "paths": ["path_1", "path_2"],
+        "pathsToExpire": [],
+        "useRegex": false,
+        "warnUnmatched": true,
+        "pathTopic": "topic",
+        "pathTopicType": "msg",
+        "correlationTopic": "",
+        "correlationTopicType": "undefined",
+        "timeout": "5",
+        "timeoutUnits": "1000",
+        "exactOrder": "false",
+        "firstMsg": "true",
+        "mapPayload": "true",
+        "disableComplete": false,
+        "persistOnRestart": false,
+        "persistStore": "",
+        "x": 360,
+        "y": 130,
+        "wires": [["qs-success"], ["qs-expired"]]
+    },
+    {
+        "id": "qs-success",
+        "type": "debug",
+        "z": "qs-tab",
+        "name": "success",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "complete": "true",
+        "x": 540,
+        "y": 100,
+        "wires": []
+    },
+    {
+        "id": "qs-expired",
+        "type": "debug",
+        "z": "qs-tab",
+        "name": "expired",
+        "active": true,
+        "tosidebar": true,
+        "console": false,
+        "complete": "true",
+        "x": 540,
+        "y": 160,
+        "wires": []
+    }
+]
