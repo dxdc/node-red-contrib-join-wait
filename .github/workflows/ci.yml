@@ -51,6 +51,10 @@ jobs:
     if: startsWith(github.ref, 'refs/tags/v')
     needs: [quality, test]
     runs-on: ubuntu-latest
+    # `production` GitHub Environment gates the publish. Configure it under
+    # Settings → Environments with optional protection rules (required
+    # reviewers, deployment-branch restriction to tags v*.*.*).
+    environment: production
     permissions:
       contents: read
       id-token: write
@@ -60,5 +64,8 @@ jobs:
         with:
           node-version: 24
           registry-url: 'https://registry.npmjs.org'
+      # Trusted Publishing requires npm ≥ 11.5.1; Node 24 ships with
+      # npm 10.x at the time of writing.
+      - run: npm install -g npm@latest
       - run: npm install --no-audit --no-fund
       - run: npm publish --provenance --access public
