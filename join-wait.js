@@ -1,463 +1,440 @@
 module.exports = function (RED) {
     'use strict';
-    const path = require('path');
-    const storage = require('node-persist');
     const jsonata = require('jsonata');
+
+    const { normalizePaths, hasDuplicatePath, compileRegex } = require('./lib/config');
+    const { matchesAny, anyMatches, findAllPathsAnyOrder, findAllPathsExactOrder } = require('./lib/matcher');
+    const persist = require('./lib/persist');
+    const { resolveContextStore } = require('./lib/store');
+
+    const RESOLVE_FAILED = Symbol('resolve-failed');
+    const DEFAULT_GROUP = '_join-wait-node';
+
+    // HTML <select> stores `'true'`/`'false'` strings, but flows constructed
+    // programmatically may use real booleans. Accept both.
+    function asBool(v) {
+        return v === true || v === 'true';
+    }
 
     function JoinWaitNode(config) {
         RED.nodes.createNode(this, config);
+        const node = this;
 
-        try {
-            this.pathsToWait = JSON.parse(config.paths);
-        } catch (err) {
-            this.pathsToWait = false;
+        // Config: paths can be a real array (new editor) or JSON string (legacy editor).
+        node.pathsToWait = normalizePaths(config.paths);
+        node.pathsToExpire = normalizePaths(config.pathsToExpire);
+
+        if (Array.isArray(node.pathsToExpire) && hasDuplicatePath(node.pathsToExpire)) {
+            node.error(`join-wait pathsToExpire cannot have duplicate entries: ${node.pathsToExpire}`);
+            node.status({ fill: 'red', shape: 'ring', text: 'config error' });
+            return;
         }
 
-        try {
-            this.pathsToExpire = JSON.parse(config.pathsToExpire);
-            if (hasDuplicatePath(this.pathsToExpire)) {
-                this.error(`join-wait pathsToExpire cannot have duplicate entries: ${this.pathsToExpire}`);
-                return;
-            }
-        } catch (err) {
-            this.pathsToExpire = false;
+        // Config keys are kept verbatim from 0.5.x flow JSON for back-compat.
+        // Internally we use clearer names: pathField (vs pathTopic),
+        // ignoreMsgComplete (vs disableComplete), persistQueue (vs persistOnRestart).
+        node.exactOrder = asBool(config.exactOrder);
+        node.useFirstAsBase = config.firstMsg !== 'false' && config.firstMsg !== false;
+        node.mapPayload = asBool(config.mapPayload);
+        node.useRegex = config.useRegex === true;
+        node.warnUnmatched = config.warnUnmatched === true;
+        node.ignoreMsgComplete = config.disableComplete === true;
+        node.persistQueue = config.persistOnRestart === true;
+        // Resolve effective context store: explicit override wins; otherwise,
+        // if Preserve queue is on AND the default store is memory AND a
+        // persistent named store exists, auto-pick it so the user doesn't
+        // have to point every join-wait node at the same store manually.
+        const explicitStore = config.persistStore || undefined;
+        node.persistStore = resolveContextStore(RED.settings.contextStorage, explicitStore, node.persistQueue);
+        if (node.persistStore && node.persistStore !== explicitStore) {
+            node.log(`auto-selected context store '${node.persistStore}' for queue persistence`);
         }
 
-        this.exactOrder = config.exactOrder === 'true';
-        this.topic = config.correlationTopic || false;
-        this.topicType = config.correlationTopicType;
-        if (this.topicType === 'jsonata') {
+        node.pathField = config.pathTopic || 'topic';
+        node.pathFieldType = config.pathTopicType || 'msg';
+
+        node.correlatorType = config.correlationTopicType;
+        node.correlator = config.correlationTopic || false;
+        if (node.correlatorType === 'jsonata' && node.correlator) {
             try {
-                this.topic = jsonata(this.topic);
-            } catch (err) {
-                this.error(`join-wait.invalid-expr topic ${err.message}`);
-                return;
-            }
-        }
-
-        this.pathTopic = config.pathTopic || 'topic';
-        this.pathTopicType = config.pathTopicType;
-
-        this.timeout = (Number(config.timeout) || 15000) * (Number(config.timeoutUnits) || 1);
-        this.firstMsg = config.firstMsg === 'true';
-        this.mapPayload = config.mapPayload === 'true';
-
-        this.useRegex = config.useRegex === true;
-        this.warnUnmatched = config.warnUnmatched === true;
-        this.disableComplete = config.disableComplete === true;
-        this.persistOnRestart = config.persistOnRestart === true;
-
-        storage.initSync({
-            dir: path.join(RED.settings.userDir, 'join-wait', config.id.toString()),
-            forgiveParseErrors: true,
-        });
-
-        const savedPaths = storage.getItemSync('paths');
-        storage.clear();
-
-        this.paths = savedPaths ? JSON.parse(savedPaths) : {};
-        let node = this;
-
-        for (const topic in node.paths) {
-            /* istanbul ignore else */
-            if (Object.prototype.hasOwnProperty.call(node.paths, topic)) {
-                if (node.persistOnRestart) {
-                    makeNewQueueTimer(topic, 10);
-                } else {
-                    clearQueueAllNoOutput(topic);
-                }
-            }
-        }
-
-        node.on('close', function (removed, done) {
-            for (const topic in node.paths) {
-                /* istanbul ignore else */
-                if (Object.prototype.hasOwnProperty.call(node.paths, topic)) {
-                    clearTimeout(node.paths[topic].timeOut);
-                    /* istanbul ignore else */
-                    if (!node.persistOnRestart) {
-                        clearQueueAllNoOutput(topic);
-                    }
-                }
-            }
-
-            if (node.persistOnRestart) {
-                storage.setItemSync('paths', JSON.stringify(node.paths));
-            }
-
-            done();
-        });
-
-        node.on('input', function (msg) {
-            //
-            // error checking
-            //
-
-            // pathTopic & pathTopicType
-
-            let pathTopic = RED.util.evaluateNodeProperty(node.pathTopic, node.pathTopicType, node, msg);
-            const pathTopicName = `${node.pathTopicType}.${node.pathTopic}`;
-
-            if (!pathTopic) {
-                node.error(`join-wait "${pathTopicName}" is undefined or not set.`, [msg, null]);
-                return;
-            }
-
-            if (typeof pathTopic === 'string') {
-                pathTopic = {
-                    [pathTopic]: true,
-                };
-            } else if (typeof pathTopic !== 'object' || Array.isArray(pathTopic)) {
-                node.error(
-                    `join-wait "${pathTopicName}" must be a string or an object, e.g., ${pathTopicName} = 'value'.`,
-                    [msg, null],
-                );
-                return;
-            }
-
-            // pathsToWait & pathsToExpire
-
-            node.pathsToWait = msg.pathsToWait || node.pathsToWait; // update global setting
-            if (!node.pathsToWait || !Array.isArray(node.pathsToWait) || !node.pathsToWait.length) {
-                node.error('join-wait pathsToWait must be a defined array.', [msg, null]);
-                return;
-            }
-
-            let pathsToWait = Object.assign([], node.pathsToWait);
-            let pathsToExpire = false;
-
-            node.pathsToExpire = msg.pathsToExpire || node.pathsToExpire; // update global setting
-            if (node.pathsToExpire) {
-                if (!Array.isArray(node.pathsToExpire) || !node.pathsToExpire.length) {
-                    node.error('join-wait pathsToExpire must be undefined or an array.', [msg, null]);
-                    return;
-                }
-
-                pathsToExpire = Object.assign([], node.pathsToExpire);
-            }
-
-            if (pathsToExpire && hasDuplicatePath(pathsToExpire)) {
-                node.error(`join-wait pathsToExpire cannot have duplicate entries: ${pathsToExpire}`);
-                return;
-            }
-
-            node.useRegex = Object.prototype.hasOwnProperty.call(msg, 'useRegex')
-                ? msg.useRegex === true
-                : node.useRegex; // update global setting
-            if (node.useRegex) {
-                try {
-                    pathsToWait = convertToRegex(pathsToWait);
-                    pathsToExpire = convertToRegex(pathsToExpire);
-                } catch (err) {
-                    node.error(`join-wait.regex-expr ${err.message}`, null);
-                    return;
-                }
-            }
-
-            const pathKeys = Object.keys(pathTopic);
-            const foundKeys = pathKeys.filter(function (val) {
-                return pathsToWait.some(function (p) {
-                    return node.useRegex ? p.test(val) : p === val;
-                });
-            });
-
-            const hasExpirePath = pathsToExpire && findAnyPath(pathKeys, pathsToExpire, node.useRegex);
-
-            if (!hasExpirePath) {
-                const notFoundKeys = pathKeys.filter(function (val) {
-                    return foundKeys.indexOf(val) === -1;
-                });
-
-                if (node.warnUnmatched && notFoundKeys.length > 0) {
-                    const unmatchedStr = notFoundKeys
-                        .map(function (key) {
-                            return `${pathTopicName}["${key}"]`;
-                        })
-                        .join(', ');
-                    node.warn(`join-wait ${unmatchedStr} doesn't exist in pathsToWait or pathsToExpire!`, [msg, null]);
-                }
-
-                if (foundKeys.length === 0) {
-                    return;
-                }
-            }
-
-            // correlation topic
-
-            let topic;
-            try {
-                if (node.topicType === 'jsonata') {
-                    topic = node.topic.evaluate({
-                        msg: msg,
-                    });
-                } else {
-                    topic = node.topic
-                        ? RED.util.evaluateNodeProperty(node.topic, node.topicType, node, msg)
-                        : '_join-wait-node';
-                }
+                node.correlator = jsonata(node.correlator);
             } catch (err) {
                 node.error(`join-wait.invalid-expr topic ${err.message}`);
+                node.status({ fill: 'red', shape: 'ring', text: 'invalid correlator' });
                 return;
             }
+        }
 
-            // map payload
+        node.timeout = (Number(config.timeout) || 15000) * (Number(config.timeoutUnits) || 1);
 
-            if (node.mapPayload) {
-                pathKeys.forEach(function (item) {
-                    pathTopic[item] = msg.payload;
-                });
-            }
+        // ---------- persistence ----------
 
-            //
-            // start processing
-            //
+        const nodeCtx = node.context();
 
-            initQueue(topic);
-            const group = node.paths[topic];
-            group.queue.push([Date.now(), msg, pathTopic]);
-
-            if ((hasExpirePath && clearQueueAllWithOutput(topic)) || clearQueueExpiredByTime(topic)) {
-                return;
-            }
-
-            const pathData = group.queue.map(function (q) {
-                return q[2];
+        // node.queues is the per-correlation-group queue dictionary, keyed by
+        // correlation value. Exposed for tests; populated asynchronously from
+        // the context store so a configured persistent store can be used.
+        node.queues = {};
+        node._ready = persist.load(nodeCtx, node.persistStore).then((saved) => {
+            node.queues = saved;
+            // Wipe what we just read; the close handler will re-write if persistOnRestart=true.
+            return persist.clear(nodeCtx, node.persistStore).then(() => {
+                for (const group of Object.keys(node.queues)) {
+                    if (node.persistQueue) {
+                        scheduleQueueTimer(group, 10);
+                    } else {
+                        dropQueue(group);
+                    }
+                }
+                updateStatus();
             });
-            const allPathKeys = pathData.map(function (q) {
-                return Object.keys(q);
-            });
-
-            const numToKeep = node.exactOrder
-                ? findAllPathsExactOrder(allPathKeys, pathsToWait, node.useRegex)
-                : findAllPathsAnyOrder(allPathKeys, pathsToWait, node.useRegex);
-
-            if (numToKeep !== null) {
-                clearQueueIfCompleteIsSet(topic, msg) || clearQueueExpiredByOrder(topic, numToKeep);
-                return;
-            }
-
-            // all paths found
-
-            const num = node.firstMsg ? 0 : group.queue.length - 1;
-            let output = group.queue[num][1];
-            output[node.pathTopic] = pathData.reduce(function (a, b) {
-                return Object.assign(a, b);
-            }, {});
-            node.send([output, null]);
-            clearQueueAllNoOutput(topic);
         });
 
-        function convertToRegex(arr) {
-            if (!Array.isArray(arr)) {
-                return arr;
+        node.on('close', function (removed, done) {
+            for (const group of Object.keys(node.queues)) {
+                clearTimeout(node.queues[group].timeOut);
+                if (!node.persistQueue) {
+                    dropQueue(group);
+                }
             }
 
-            return arr.map(function (pattern) {
-                return new RegExp(pattern);
-            });
-        }
+            const writeBack = node.persistQueue
+                ? persist.save(nodeCtx, node.persistStore, node.queues)
+                : persist.clear(nodeCtx, node.persistStore);
 
-        function flatten(arr) {
-            return [].concat.apply([], arr);
-        }
+            // Always call done — even on a context-store rejection — so
+            // Node-RED's shutdown isn't held up indefinitely.
+            writeBack.then(
+                () => done(),
+                /* c8 ignore next */
+                (err) => done(err),
+            );
+        });
 
-        function condenseWithCount(arr) {
-            arr = arr.reduce((map, key) => map.set(key, (map.get(key) || 0) + 1), new Map());
-            return Array.from(arr, ([name, value]) => ({ name, value }));
-        }
+        // ---------- input handler ----------
 
-        function regexIndexOf(arr, needle) {
-            let result = -1;
+        // Modern Node-RED (msg, send, done) signature:
+        //   - `send` is the per-invocation send fn — safer than node.send in
+        //     async handlers because it can't fire after shutdown.
+        //   - `done()` tells the runtime this message has finished
+        //     processing (used for async-message tracking + graceful
+        //     shutdown). For a join node, "finished" means *buffered* —
+        //     we mark each input done when it's queued or rejected. The
+        //     completing message's done() also covers the success emission;
+        //     the earlier-queued msgs were already done() at intake.
+        node.on('input', async function (msg, send, done) {
+            try {
+                // Wait for the initial context load before processing — guarantees
+                // we don't race the persisted state read with a freshly-arriving msg.
+                await node._ready;
 
-            arr.some(function (p, i) {
-                if (p.test(needle)) {
-                    result = i;
-                    return true;
+                const evalCtx = await buildEvalContext(msg);
+                if (!evalCtx) {
+                    done();
+                    return;
                 }
-            });
-            return result;
-        }
 
-        function hasDuplicatePath(arr) {
-            return arr.some(function (p, index) {
-                return arr.indexOf(p) !== index;
-            });
-        }
+                if (msg.reset === true) {
+                    if (Object.prototype.hasOwnProperty.call(node.queues, evalCtx.group)) {
+                        dropQueue(evalCtx.group);
+                    }
+                    updateStatus();
+                    done();
+                    return;
+                }
 
-        function findAnyPath(msgPaths, arr, useRegex) {
-            return msgPaths.some(function (p) {
-                if (useRegex) {
-                    return arr.some(function (pattern) {
-                        return pattern.test(p);
+                if (node.mapPayload) {
+                    evalCtx.pathKeys.forEach((k) => {
+                        evalCtx.pathTopic[k] = msg.payload;
                     });
-                } else {
-                    return arr.includes(p);
                 }
-            });
+
+                enqueueAndEvaluate(msg, evalCtx, send);
+                updateStatus();
+                done();
+                /* c8 ignore next 5 */
+            } catch (err) {
+                node.error(`join-wait unhandled: ${err && err.message}`, msg);
+                node.status({ fill: 'red', shape: 'ring', text: 'error' });
+                done(err);
+            }
+        });
+
+        // Builds the per-message evaluation context. Returns null after
+        // emitting an appropriate error (so the caller just bails).
+        async function buildEvalContext(msg) {
+            const overrides = resolveOverrides(msg);
+            if (!validateOverrides(msg, overrides)) return null;
+
+            const pathTopic = resolvePathTopic(msg);
+            if (!pathTopic) return null;
+
+            const patterns = compilePatterns(msg, overrides);
+            if (!patterns) return null;
+
+            const pathKeys = Object.keys(pathTopic);
+            const foundKeys = pathKeys.filter((k) => matchesAny(k, patterns.wait, overrides.useRegex));
+            const hasExpirePath = patterns.expire && anyMatches(pathKeys, patterns.expire, overrides.useRegex);
+
+            if (!hasExpirePath) {
+                warnUnmatched(msg, pathKeys, foundKeys);
+                if (foundKeys.length === 0) return null;
+            }
+
+            const group = await resolveCorrelationGroup(msg);
+            if (group === RESOLVE_FAILED) return null;
+
+            return {
+                pathTopic,
+                pathKeys,
+                patterns,
+                hasExpirePath,
+                useRegex: overrides.useRegex,
+                group,
+            };
         }
 
-        function findAllPathsAnyOrder(arr, waitPaths, useRegex) {
-            const waitMap = condenseWithCount(waitPaths);
-            const keys = flatten(arr);
-            const result = countPathsAnyOrder(keys, waitMap, useRegex);
+        // Pick a per-message override array, or fall back to the node config.
+        function arrayOrFallback(msgValue, nodeValue) {
+            if (msgValue === undefined) return nodeValue;
+            return Array.isArray(msgValue) ? msgValue : false;
+        }
 
-            const allPathsFound = result.every(function (p) {
-                return p === true;
-            });
+        // Per-message one-shot overrides. None of these mutate node-level state.
+        function resolveOverrides(msg) {
+            return {
+                pathsToWait: Array.isArray(msg.pathsToWait) ? msg.pathsToWait : node.pathsToWait,
+                pathsToExpire: arrayOrFallback(msg.pathsToExpire, node.pathsToExpire),
+                useRegex: Object.prototype.hasOwnProperty.call(msg, 'useRegex') ? msg.useRegex === true : node.useRegex,
+            };
+        }
 
-            if (allPathsFound) {
+        function validateOverrides(msg, overrides) {
+            if (!Array.isArray(overrides.pathsToWait) || overrides.pathsToWait.length === 0) {
+                node.error('join-wait pathsToWait must be a defined array.', msg);
+                node.status({ fill: 'red', shape: 'ring', text: 'pathsToWait empty' });
+                return false;
+            }
+            if (
+                msg.pathsToExpire !== undefined &&
+                (!Array.isArray(msg.pathsToExpire) || msg.pathsToExpire.length === 0)
+            ) {
+                node.error('join-wait pathsToExpire must be undefined or an array.', msg);
+                node.status({ fill: 'red', shape: 'ring', text: 'pathsToExpire invalid' });
+                return false;
+            }
+            if (Array.isArray(overrides.pathsToExpire) && hasDuplicatePath(overrides.pathsToExpire)) {
+                node.error(`join-wait pathsToExpire cannot have duplicate entries: ${overrides.pathsToExpire}`, msg);
+                node.status({ fill: 'red', shape: 'ring', text: 'duplicate expire path' });
+                return false;
+            }
+            return true;
+        }
+
+        function resolvePathTopic(msg) {
+            const propName = `${node.pathFieldType}.${node.pathField}`;
+            const value = RED.util.evaluateNodeProperty(node.pathField, node.pathFieldType, node, msg);
+
+            if (!value) {
+                node.error(`join-wait "${propName}" is undefined or not set.`, msg);
+                node.status({ fill: 'red', shape: 'ring', text: `${propName} unset` });
                 return null;
             }
-
-            const originalString = result.toString();
-
-            for (let i = 0; i < arr.length; i++) {
-                const newKeys = flatten(arr.slice(i + 1));
-                const expireByOne = countPathsAnyOrder(newKeys, waitMap, useRegex);
-                if (originalString !== expireByOne.toString()) {
-                    return arr.length - i;
-                }
+            if (typeof value === 'string') return { [value]: true };
+            if (typeof value !== 'object' || Array.isArray(value)) {
+                node.error(`join-wait "${propName}" must be a string or an object, e.g., ${propName} = 'value'.`, [
+                    msg,
+                    null,
+                ]);
+                node.status({ fill: 'red', shape: 'ring', text: `${propName} invalid` });
+                return null;
             }
-
-            /* istanbul ignore next */
-            return 0;
+            // Shallow-clone — mapPayload would otherwise mutate the caller's object.
+            return Object.assign({}, value);
         }
 
-        function countPathsAnyOrder(keys, waitMap, useRegex) {
-            let used = [];
-
-            return waitMap.map(function (p) {
-                const count = keys.filter(function (val, i) {
-                    if (used.indexOf(i) !== -1) {
-                        return false;
-                    }
-                    const found = useRegex ? p.name.test(val) : p.name === val;
-                    if (!found) {
-                        return false;
-                    }
-
-                    used.push(i);
-                    return true;
-                }).length;
-
-                return count < p.value ? count : true;
-            });
-        }
-
-        function findAllPathsExactOrder(arr, waitPaths, useRegex) {
-            let start = 0;
-            let marker = false;
-
-            for (let i = 0; i < arr.length; i++) {
-                for (let j = 0; j < arr[i].length; j++) {
-                    const path = arr[i][j];
-
-                    let offBy = marker === false ? 0 : marker + 1;
-                    const unusedWaitPaths = waitPaths.slice(offBy);
-                    let index = useRegex ? regexIndexOf(unusedWaitPaths, path) : unusedWaitPaths.indexOf(path);
-
-                    if (index === -1) {
-                        /* istanbul ignore else */
-                        if (offBy > 0) {
-                            index = useRegex ? regexIndexOf(waitPaths, path) : waitPaths.indexOf(path);
-                            if (index > 0) {
-                                marker = false;
-                            }
-                        }
-                    } else {
-                        index += offBy;
-                    }
-
-                    if (index === 0) {
-                        start = i;
-                    } else if (index === -1 || marker === false) {
-                        continue;
-                    } else if (index < marker || index > marker + 1) {
-                        marker = false;
-                        continue;
-                    }
-
-                    if (index === waitPaths.length - 1) {
-                        return null;
-                    }
-
-                    marker = index;
-                }
+        function compilePatterns(msg, overrides) {
+            if (!overrides.useRegex) {
+                return { wait: overrides.pathsToWait, expire: overrides.pathsToExpire };
             }
-
-            return marker === false ? 0 : arr.length - start;
-        }
-
-        // queue & timer handling
-
-        function initQueue(topic) {
-            if (!Object.prototype.hasOwnProperty.call(node.paths, topic)) {
-                node.paths[topic] = {
-                    queue: [],
+            try {
+                return {
+                    wait: compileRegex(overrides.pathsToWait),
+                    expire: compileRegex(overrides.pathsToExpire),
                 };
-                makeNewQueueTimer(topic, node.timeout);
+            } catch (err) {
+                node.error(`join-wait.regex-expr ${err.message}`, msg);
+                node.status({ fill: 'red', shape: 'ring', text: 'invalid regex' });
+                return null;
             }
         }
 
-        function makeNewQueueTimer(topic, timeout) {
-            const group = node.paths[topic];
+        function warnUnmatched(msg, pathKeys, foundKeys) {
+            if (!node.warnUnmatched) return;
+            const propName = `${node.pathFieldType}.${node.pathField}`;
+            const unknown = pathKeys.filter((k) => foundKeys.indexOf(k) === -1);
+            if (unknown.length === 0) return;
+            const list = unknown.map((k) => `${propName}["${k}"]`).join(', ');
+            node.warn(`join-wait ${list} doesn't exist in pathsToWait or pathsToExpire!`, msg);
+        }
 
-            group.timeOut = setTimeout(function () {
-                if (clearQueueExpiredByTime(topic)) {
-                    return;
-                } else {
-                    const next = group.queue[0][0] + node.timeout - Date.now();
-                    makeNewQueueTimer(topic, next);
+        // jsonata v2 returns a Promise; msg/flow/global types resolve sync.
+        async function resolveCorrelationGroup(msg) {
+            try {
+                if (node.correlatorType === 'jsonata') {
+                    return node.correlator ? await node.correlator.evaluate({ msg: msg }) : DEFAULT_GROUP;
                 }
-            }, timeout);
+                if (node.correlator) {
+                    return RED.util.evaluateNodeProperty(node.correlator, node.correlatorType, node, msg);
+                }
+                return DEFAULT_GROUP;
+            } catch (err) {
+                node.error(`join-wait.invalid-expr topic ${err.message}`, msg);
+                node.status({ fill: 'red', shape: 'ring', text: 'invalid correlator' });
+                return RESOLVE_FAILED;
+            }
         }
 
-        // returns boolean if queue is empty (= true)
+        function enqueueAndEvaluate(msg, evalCtx, send) {
+            initQueue(evalCtx.group);
+            const queue = node.queues[evalCtx.group];
+            queue.queue.push([Date.now(), msg, evalCtx.pathTopic]);
 
-        function clearQueueAllNoOutput(topic) {
-            return _queueDeletionHandler(topic, false, false, 0);
+            // If this message hit a reset path, drain everything to the expired
+            // output. Otherwise, age out anything that's already past the timeout
+            // window (keeps long-idle queues from snowballing). Either drain may
+            // empty the queue entirely, in which case we're done.
+            if (evalCtx.hasExpirePath) {
+                if (flushQueueAsExpired(evalCtx.group)) return;
+            } else if (flushTimedOutEntries(evalCtx.group)) {
+                return;
+            }
+
+            const allPathKeys = queue.queue.map((q) => Object.keys(q[2]));
+            const result = node.exactOrder
+                ? findAllPathsExactOrder(allPathKeys, evalCtx.patterns.wait, evalCtx.useRegex)
+                : findAllPathsAnyOrder(allPathKeys, evalCtx.patterns.wait, evalCtx.useRegex);
+
+            if (!result.matched) {
+                if (!flushOnMsgComplete(evalCtx.group, msg)) {
+                    flushTrailingEntries(evalCtx.group, result.keep);
+                }
+                return;
+            }
+
+            // All required paths matched — emit success and clear.
+            const baseIndex = node.useFirstAsBase ? 0 : queue.queue.length - 1;
+            const output = queue.queue[baseIndex][1];
+            output[node.pathField] = queue.queue.map((q) => q[2]).reduce((a, b) => Object.assign(a, b), {});
+            send([output, null]);
+            dropQueue(evalCtx.group);
         }
 
-        function clearQueueAllWithOutput(topic) {
-            return _queueDeletionHandler(topic, true, false, 0);
+        // ---------- queue + timer management ----------
+
+        function initQueue(group) {
+            if (!Object.prototype.hasOwnProperty.call(node.queues, group)) {
+                node.queues[group] = { queue: [] };
+                scheduleQueueTimer(group, node.timeout);
+            }
         }
 
-        function clearQueueIfCompleteIsSet(topic, msg) {
-            if (!node.disableComplete && Object.prototype.hasOwnProperty.call(msg, 'complete')) {
-                return clearQueueAllWithOutput(topic);
+        function scheduleQueueTimer(group, delayMs) {
+            const entry = node.queues[group];
+            entry.timeOut = setTimeout(function () {
+                if (flushTimedOutEntries(group)) {
+                    updateStatus();
+                    return;
+                }
+                const next = entry.queue[0][0] + node.timeout - Date.now();
+                scheduleQueueTimer(group, next);
+            }, delayMs);
+        }
+
+        // Drain helpers — each returns true if the queue was fully emptied
+        // (and removed from node.queues), false if entries remain.
+        function dropQueue(group) {
+            return drainQueue(group, { sendExpired: false, expireByTime: false, keep: 0 });
+        }
+
+        function flushQueueAsExpired(group) {
+            return drainQueue(group, { sendExpired: true, expireByTime: false, keep: 0 });
+        }
+
+        // `msg.complete` is consulted only when the wait paths haven't yet
+        // matched (the call site sits under `if (numToKeep !== null)`). If
+        // they have matched, the success path emits + drains and `complete`
+        // is irrelevant. Net effect: `complete` short-circuits a partial
+        // queue to the expired output, but never overrides a successful
+        // match. Set Ignore msg.complete to disable.
+        function flushOnMsgComplete(group, msg) {
+            if (!node.ignoreMsgComplete && Object.prototype.hasOwnProperty.call(msg, 'complete')) {
+                return flushQueueAsExpired(group);
             }
             return false;
         }
 
-        function clearQueueExpiredByOrder(topic, numToKeep) {
-            return _queueDeletionHandler(topic, true, false, numToKeep);
+        function flushTrailingEntries(group, keep) {
+            return drainQueue(group, { sendExpired: true, expireByTime: false, keep: keep });
         }
 
-        function clearQueueExpiredByTime(topic) {
-            return _queueDeletionHandler(topic, true, true, 0);
+        function flushTimedOutEntries(group) {
+            return drainQueue(group, { sendExpired: true, expireByTime: true, keep: 0 });
         }
 
-        function _queueDeletionHandler(topic, sendExpired, checkExpireTime, numToKeep) {
-            const group = node.paths[topic];
-            const isExpired = function () {
-                return checkExpireTime ? group.queue[0][0] < Date.now() - node.timeout : true;
-            };
+        // Pops entries off the front of the group's queue. With `sendExpired`,
+        // each popped entry is forwarded to the expired output. With
+        // `expireByTime`, popping stops once the head entry is still within
+        // the timeout window. Returns true once the queue is empty + removed.
+        function drainQueue(group, opts) {
+            const entry = node.queues[group];
+            const sendExpired = opts.sendExpired;
+            const expireByTime = opts.expireByTime;
+            const keep = opts.keep;
+            const isExpired = () => (expireByTime ? entry.queue[0][0] < Date.now() - node.timeout : true);
 
-            while (group.queue.length > numToKeep && isExpired()) {
-                const expired = group.queue.shift();
+            while (entry.queue.length > keep && isExpired()) {
+                const popped = entry.queue.shift();
                 if (sendExpired) {
-                    const msg = Object.assign(expired[1], { paths: expired[2] });
-                    node.send([null, msg]);
+                    const out = popped[1];
+                    out[node.pathField] = popped[2];
+                    node.send([null, out]);
                 }
             }
 
-            if (group.queue.length !== 0) {
-                return false;
+            if (entry.queue.length !== 0) return false;
+
+            clearTimeout(entry.timeOut);
+            delete node.queues[group];
+            return true;
+        }
+
+        function updateStatus() {
+            const groups = Object.keys(node.queues);
+            if (groups.length === 0) {
+                node.status({});
+                return;
             }
 
-            clearTimeout(group.timeOut);
-            delete node.paths[topic];
-            return true;
+            // Single group: show progress toward completion ("2/3 received").
+            // Multiple groups: aggregate counts since per-group progress would
+            // be misleading.
+            if (groups.length === 1) {
+                const g = groups[0];
+                const queued = node.queues[g].queue.length;
+                const required = Array.isArray(node.pathsToWait) ? node.pathsToWait.length : 0;
+                const text = required > 0 ? `${Math.min(queued, required)}/${required} received` : `queued: ${queued}`;
+                node.status({ fill: 'blue', shape: 'dot', text: text });
+                return;
+            }
+
+            let total = 0;
+            for (const g of groups) total += node.queues[g].queue.length;
+            node.status({
+                fill: 'blue',
+                shape: 'dot',
+                text: `groups: ${groups.length}, queued: ${total}`,
+            });
         }
     }
 
