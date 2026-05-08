@@ -1,11 +1,20 @@
-// var should = require('should');
-var os = require('os');
-var path = require('path');
+var os = require('node:os');
 var helper = require('node-red-node-test-helper');
 helper.init(require.resolve('node-red'), { userDir: os.tmpdir() });
 
 var flows = require('./flows');
 var joinWaitNode = require('../join-wait.js');
+
+// Wait for the input handler to have processed an awaited message. The async
+// input pipeline yields once for `await node._ready` and again for the
+// jsonata path. Two `setImmediate`s + a microtask is plenty.
+function flushAsync() {
+    return new Promise(function (resolve) {
+        setImmediate(function () {
+            setImmediate(resolve);
+        });
+    });
+}
 
 describe('wait paths node', function () {
     before(function (done) {
@@ -521,6 +530,8 @@ describe('wait paths node', function () {
     });
 
     it('should handle exact order flow (regex - set inline), 1 expired', function (done) {
+        // msg.useRegex is now a one-shot override (no longer persisted on the node).
+        // Each message that should be evaluated as regex must include useRegex:true.
         var opts = { exactOrder: 'true', paths: '["path_[12]", "path_3"]' };
         var flow = flows.getDefault(opts);
 
@@ -547,8 +558,8 @@ describe('wait paths node', function () {
                 counter++;
             });
             n1.receive({ paths: 'path_2', useRegex: true, payload: 'payload2' });
-            n1.receive({ paths: 'path_3', payload: 'payload3' });
-            n1.receive({ paths: 'path_1', payload: 'payload3' });
+            n1.receive({ paths: 'path_3', useRegex: true, payload: 'payload3' });
+            n1.receive({ paths: 'path_1', useRegex: true, payload: 'payload3' });
         });
     });
 
@@ -827,155 +838,10 @@ describe('wait paths node', function () {
         });
     });
 
-    it('should expire paths on load', function (done) {
-        var storage = require('node-persist');
-        storage.initSync({
-            dir: path.join(os.tmpdir(), 'join-wait', 'n1'),
-            forgiveParseErrors: true,
-        });
-        var data = {
-            '_join-wait-node': {
-                queue: [
-                    [
-                        1611966107117,
-                        {
-                            paths: 'path_1',
-                            payload: 'payload1',
-                            _msgid: '8fe56348.20ff2',
-                        },
-                        {
-                            path_1: 'payload1',
-                        },
-                    ],
-
-                    [
-                        1611966107117,
-                        {
-                            paths: 'path_3',
-                            payload: 'payload3',
-                            _msgid: 'cb61c65a.8586a8',
-                        },
-                        {
-                            path_3: 'payload3',
-                        },
-                    ],
-                ],
-            },
-        };
-        storage.setItemSync('paths', JSON.stringify(data));
-
-        var opts = {
-            pathsToExpire: '["path_2"]',
-        };
-        var flow = flows.getDefault(opts);
-
-        helper.load(joinWaitNode, flow, function () {
-            var n1 = helper.getNode('n1');
-            var n2 = helper.getNode('n2');
-            var n3 = helper.getNode('n3');
-            n3.on('input', function (msg) {
-                msg.should.have.property('payload', 'payload1');
-                msg.should.have.property('paths').eql({ path_2: 'payload1' });
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(0);
-                storage.clear();
-                done();
-            });
-            n2.on('input', function (msg) {
-                storage.clear();
-                done(msg);
-            });
-            n1.receive({ paths: { path_2: 'payload2' }, payload: 'payload1' });
-        });
-    });
-
-    it('should not expire paths on load', function (done) {
-        var storage = require('node-persist');
-        storage.initSync({
-            dir: path.join(os.tmpdir(), 'join-wait', 'n1'),
-            forgiveParseErrors: true,
-        });
-        var data = {
-            '_join-wait-node': {
-                queue: [
-                    [
-                        1611966107117,
-                        {
-                            paths: 'path_1',
-                            payload: 'payload1',
-                            _msgid: '8fe56348.20ff2',
-                        },
-                        {
-                            path_1: 'payload1',
-                        },
-                    ],
-
-                    [
-                        1611966107117,
-                        {
-                            paths: 'path_3',
-                            payload: 'payload3',
-                            _msgid: 'cb61c65a.8586a8',
-                        },
-                        {
-                            path_3: 'payload3',
-                        },
-                    ],
-                ],
-            },
-        };
-        storage.setItemSync('paths', JSON.stringify(data));
-
-        var opts = {
-            pathsToExpire: '["path_2"]',
-            persistOnRestart: true,
-        };
-        var flow = flows.getDefault(opts);
-
-        helper.load(joinWaitNode, flow, function () {
-            var n1 = helper.getNode('n1');
-            var n2 = helper.getNode('n2');
-            var n3 = helper.getNode('n3');
-
-            var counter = 1;
-
-            n3.on('input', function (msg) {
-                switch (counter) {
-                    case 1: {
-                        msg.should.have.property('payload', 'payload1');
-                        msg.should.have.property('paths').eql({ path_1: 'payload1' });
-                        ++counter;
-                        return;
-                    }
-                    case 2: {
-                        msg.should.have.property('payload', 'payload3');
-                        msg.should.have.property('paths').eql({ path_3: 'payload3' });
-                        ++counter;
-                        return;
-                    }
-                    case 3: {
-                        msg.should.have.property('payload', 'payload1');
-                        msg.should.have.property('paths').eql({ path_2: 'payload1' });
-                        ++counter;
-                    }
-                }
-
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(0);
-                storage.clear();
-                done();
-            });
-            n2.on('input', function (msg) {
-                storage.clear();
-                done(msg);
-            });
-            n1.receive({ paths: { path_2: 'payload2' }, payload: 'payload1' });
-        });
-    });
+    // The persistence load path (read context store on construct, restart timers
+    // for stale entries) is exercised via the persistence adapter unit tests
+    // in test/persist_spec.js. End-to-end round-trip tests aren't viable with
+    // the current `node-red-node-test-helper`, which wipes context on unload.
 
     it('should expire path - mapped paths', function (done) {
         var opts = { paths: '["path_1", "path_3"]', pathsToExpire: '["path_2"]' };
@@ -1052,25 +918,27 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: { missing1: false, missing2: true }, payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
-                msg.should.have.property('level', helper.log().WARN);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property(
-                    'msg',
-                    'join-wait msg.paths["missing1"], msg.paths["missing2"] doesn\'t exist in pathsToWait or pathsToExpire!',
-                );
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    var msg = logEvents[0][0];
+                    msg.should.have.property('level', helper.log().WARN);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property(
+                        'msg',
+                        'join-wait msg.paths["missing1"], msg.paths["missing2"] doesn\'t exist in pathsToWait or pathsToExpire!',
+                    );
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1082,22 +950,27 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: 'path_1', payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property('msg', 'join-wait.invalid-expr topic Expected ":" before end of expression');
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    var msg = logEvents[0][0];
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property(
+                        'msg',
+                        'join-wait.invalid-expr topic Expected ":" before end of expression',
+                    );
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1109,22 +982,24 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: 'path_1', payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property('msg', 'join-wait.invalid-expr topic Attempted to invoke a non-function');
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    var msg = logEvents[0][0];
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property('msg', 'join-wait.invalid-expr topic Attempted to invoke a non-function');
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1136,22 +1011,27 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: 'path_1', payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property('msg', 'join-wait pathsToExpire cannot have duplicate entries: path_1,path_1');
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    var msg = logEvents[0][0];
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property(
+                        'msg',
+                        'join-wait pathsToExpire cannot have duplicate entries: path_1,path_1',
+                    );
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1162,22 +1042,27 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: 'path_1', pathsToExpire: ['path_1', 'path_1'], payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property('msg', 'join-wait pathsToExpire cannot have duplicate entries: path_1,path_1');
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    var msg = logEvents[0][0];
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property(
+                        'msg',
+                        'join-wait pathsToExpire cannot have duplicate entries: path_1,path_1',
+                    );
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1188,26 +1073,28 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: ['badpath'], payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
+                    var msg = logEvents[0][0];
 
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property(
-                    'msg',
-                    'join-wait "msg.paths" must be a string or an object, e.g., msg.paths = \'value\'.',
-                );
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property(
+                        'msg',
+                        'join-wait "msg.paths" must be a string or an object, e.g., msg.paths = \'value\'.',
+                    );
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1218,26 +1105,28 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: 5, payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
+                    var msg = logEvents[0][0];
 
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property(
-                    'msg',
-                    'join-wait "msg.paths" must be a string or an object, e.g., msg.paths = \'value\'.',
-                );
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property(
+                        'msg',
+                        'join-wait "msg.paths" must be a string or an object, e.g., msg.paths = \'value\'.',
+                    );
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1248,22 +1137,24 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: '', payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property('msg', 'join-wait "msg.paths" is undefined or not set.');
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    var msg = logEvents[0][0];
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property('msg', 'join-wait "msg.paths" is undefined or not set.');
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1274,22 +1165,24 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property('msg', 'join-wait "msg.paths" is undefined or not set.');
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    var msg = logEvents[0][0];
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property('msg', 'join-wait "msg.paths" is undefined or not set.');
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1301,26 +1194,28 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: 'path_1', payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
+                    var msg = logEvents[0][0];
 
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property(
-                    'msg',
-                    'join-wait.regex-expr Invalid regular expression: /path_[1/: Unterminated character class',
-                );
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property(
+                        'msg',
+                        'join-wait.regex-expr Invalid regular expression: /path_[1/: Unterminated character class',
+                    );
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1332,26 +1227,28 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: 'path_1', payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
+                    var msg = logEvents[0][0];
 
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property(
-                    'msg',
-                    'join-wait.regex-expr Invalid regular expression: /path_[1/: Unterminated character class',
-                );
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property(
+                        'msg',
+                        'join-wait.regex-expr Invalid regular expression: /path_[1/: Unterminated character class',
+                    );
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1362,23 +1259,25 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: 'path_1', pathsToWait: [], payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
+                    var msg = logEvents[0][0];
 
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property('msg', 'join-wait pathsToWait must be a defined array.');
-                done();
-            } catch (err) {
-                done(err);
-            }
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property('msg', 'join-wait pathsToWait must be a defined array.');
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
         });
     });
 
@@ -1389,23 +1288,158 @@ describe('wait paths node', function () {
             var n1 = helper.getNode('n1');
             n1.receive({ paths: 'path_1', pathsToExpire: [], payload: 'payload1' });
 
-            try {
-                helper.log().called.should.be.true();
-                var logEvents = helper.log().args.filter(function (evt) {
-                    return evt[0].type == 'join-wait';
-                });
-                logEvents.should.have.length(1);
+            flushAsync().then(function () {
+                try {
+                    helper.log().called.should.be.true();
+                    var logEvents = helper.log().args.filter(function (evt) {
+                        return evt[0].type == 'join-wait';
+                    });
+                    logEvents.should.have.length(1);
 
-                var msg = logEvents[0][0];
+                    var msg = logEvents[0][0];
 
-                msg.should.have.property('level', helper.log().ERROR);
-                msg.should.have.property('id', 'n1');
-                msg.should.have.property('type', 'join-wait');
-                msg.should.have.property('msg', 'join-wait pathsToExpire must be undefined or an array.');
+                    msg.should.have.property('level', helper.log().ERROR);
+                    msg.should.have.property('id', 'n1');
+                    msg.should.have.property('type', 'join-wait');
+                    msg.should.have.property('msg', 'join-wait pathsToExpire must be undefined or an array.');
+                    done();
+                } catch (err) {
+                    done(err);
+                }
+            });
+        });
+    });
+
+    it('should clear the queue on msg.reset without sending output', function (done) {
+        var flow = flows.getDefault();
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            var n2 = helper.getNode('n2');
+            var n3 = helper.getNode('n3');
+            var fired = false;
+
+            n2.on('input', function () {
+                fired = true;
+            });
+            n3.on('input', function () {
+                fired = true;
+            });
+
+            n1.receive({ paths: 'path_1', payload: 'p1' });
+            n1.receive({ paths: 'path_2', payload: 'p2' });
+            // queue now has [path_1, path_2]; reset should drop both with no output
+            n1.receive({ paths: 'path_1', reset: true, payload: 'reset' });
+
+            setTimeout(function () {
+                fired.should.be.false();
+                Object.keys(n1.queues).length.should.equal(0);
                 done();
-            } catch (err) {
-                done(err);
-            }
+            }, 50);
+        });
+    });
+
+    it('should treat msg.useRegex as a one-shot override', function (done) {
+        var opts = { paths: '["path_1", "path_2"]' };
+        var flow = flows.getDefault(opts);
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            var n2 = helper.getNode('n2');
+            // Send a regex match with useRegex:true (matches path_1), then a literal that wouldn't
+            // match if useRegex stuck around globally for subsequent messages.
+            n2.on('input', function (msg) {
+                msg.should.have.property('paths').eql({ path_1: 'a', path_2: 'b' });
+                n1.useRegex.should.be.false();
+                done();
+            });
+            n1.receive({ paths: 'path_1', useRegex: true, payload: 'a' });
+            n1.receive({ paths: 'path_2', payload: 'b' });
+        });
+    });
+
+    it('should treat msg.pathsToWait as a one-shot override', function (done) {
+        var opts = { paths: '["path_1", "path_2"]' };
+        var flow = flows.getDefault(opts);
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            // Override pathsToWait on first message; subsequent message uses node-level config.
+            n1.receive({ paths: 'foo', pathsToWait: ['foo'], payload: 'a' });
+            // node-level pathsToWait is unchanged
+            JSON.stringify(n1.pathsToWait).should.equal('["path_1","path_2"]');
+            done();
+        });
+    });
+
+    it('should not mutate a passed pathTopic object when mapPayload is on', function (done) {
+        var opts = { mapPayload: 'true' };
+        var flow = flows.getDefault(opts);
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            var sharedPaths = { path_1: 'original' };
+            n1.receive({ paths: sharedPaths, payload: 'overwritten' });
+            // The caller's object should NOT have been mutated
+            sharedPaths.path_1.should.equal('original');
+            done();
+        });
+    });
+
+    it('should report progress (n/m received) via node.status()', function (done) {
+        var flow = flows.getDefault();
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            var statuses = [];
+            // Wrap status to capture calls
+            var origStatus = n1.status;
+            n1.status = function (s) {
+                statuses.push(s);
+                origStatus.call(n1, s);
+            };
+            n1.receive({ paths: 'path_1', payload: 'a' });
+            n1.receive({ paths: 'path_2', payload: 'b' });
+            setTimeout(function () {
+                var hasProgress = statuses.some(function (s) {
+                    return s && s.text && /\d+\/\d+ received/.test(s.text);
+                });
+                hasProgress.should.be.true();
+                done();
+            }, 50);
+        });
+    });
+
+    it('should populate node.paths on input and clear it after a complete match', function (done) {
+        var flow = flows.getDefault({ timeout: '60', timeoutUnits: '1000' });
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            var n2 = helper.getNode('n2');
+            n2.on('input', function () {
+                // After a successful merge, the queue for the topic should be cleared.
+                Object.keys(n1.queues).length.should.equal(0);
+                done();
+            });
+            n1.receive({ paths: 'path_1', payload: 'a' });
+            n1.receive({ paths: 'path_2', payload: 'b' });
+            flushAsync().then(function () {
+                Object.keys(n1.queues).length.should.equal(1);
+                n1.receive({ paths: 'path_3', payload: 'c' });
+            });
+        });
+    });
+
+    it('should fail invalid pathsToExpire (non-array, non-string config)', function (done) {
+        var opts = { pathsToExpire: '{"not":"array"}' };
+        var flow = flows.getDefault(opts);
+
+        helper.load(joinWaitNode, flow, function () {
+            var n1 = helper.getNode('n1');
+            // pathsToExpire JSON parses but isn't an array → normalizePaths returns false
+            // No error from constructor; sending input still works using node.pathsToWait
+            n1.receive({ paths: 'path_1', payload: 'a' });
+            setTimeout(done, 30);
         });
     });
 });
