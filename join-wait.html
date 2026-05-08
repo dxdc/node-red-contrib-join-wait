@@ -352,10 +352,19 @@
         }
 
         function openExamplesDialog() {
-            // Open the import dialog; the user picks Examples → join-wait.
-            // RED.actions exposes core actions across recent Node-RED versions.
-            if (RED.actions && typeof RED.actions.invoke === 'function') {
-                RED.actions.invoke('core:show-import-dialog');
+            // The edit tray is on top of the editor, so the import tray
+            // can't surface beneath it. Close this tray first (which cancels
+            // the in-flight edit), then invoke the core import dialog so the
+            // user can pick Examples → join-wait.
+            var invoke = function () {
+                if (RED.actions && typeof RED.actions.invoke === 'function') {
+                    RED.actions.invoke('core:show-import-dialog');
+                }
+            };
+            if (RED.tray && typeof RED.tray.close === 'function') {
+                RED.tray.close(invoke);
+            } else {
+                invoke();
             }
         }
 

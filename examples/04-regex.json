@@ -12,9 +12,14 @@
         "z": "rx-tab",
         "name": "sensor_a",
         "props": [
-            { "p": "topic", "v": "sensor_a", "vt": "str" },
+            { "p": "topic", "vt": "str" },
             { "p": "payload", "v": "42", "vt": "num" }
         ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "sensor_a",
         "x": 130,
         "y": 80,
         "wires": [["rx-jw"]]
@@ -25,9 +30,14 @@
         "z": "rx-tab",
         "name": "heartbeat",
         "props": [
-            { "p": "topic", "v": "heartbeat", "vt": "str" },
+            { "p": "topic", "vt": "str" },
             { "p": "payload", "v": "ok", "vt": "str" }
         ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "heartbeat",
         "x": 130,
         "y": 140,
         "wires": [["rx-jw"]]

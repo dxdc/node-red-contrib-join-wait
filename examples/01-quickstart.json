@@ -11,7 +11,15 @@
         "type": "inject",
         "z": "qs-tab",
         "name": "path_1",
-        "props": [{ "p": "topic", "v": "path_1", "vt": "str" }, { "p": "payload", "v": "hello-1", "vt": "str" }],
+        "props": [
+            { "p": "topic", "vt": "str" },
+            { "p": "payload", "v": "hello-1", "vt": "str" }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "path_1",
         "x": 130,
         "y": 100,
         "wires": [["qs-jw"]]
@@ -21,7 +29,15 @@
         "type": "inject",
         "z": "qs-tab",
         "name": "path_2",
-        "props": [{ "p": "topic", "v": "path_2", "vt": "str" }, { "p": "payload", "v": "hello-2", "vt": "str" }],
+        "props": [
+            { "p": "topic", "vt": "str" },
+            { "p": "payload", "v": "hello-2", "vt": "str" }
+        ],
+        "repeat": "",
+        "crontab": "",
+        "once": false,
+        "onceDelay": "",
+        "topic": "path_2",
         "x": 130,
         "y": 160,
         "wires": [["qs-jw"]]
