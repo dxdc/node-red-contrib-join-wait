@@ -63,4 +63,30 @@ describe('editor HTML', function () {
     it('does not reference the legacy ignoreUnmatched field', function () {
         should(html).not.match(/ignoreUnmatched/);
     });
+
+    it('renders the persist store as a <select>, not a free-text input', function () {
+        html.should.match(/<select id="node-input-persistStore"/);
+    });
+
+    it('exposes mount points for the output preview, timeout hint, and examples button', function () {
+        html.should.match(/id="join-wait-output-preview"/);
+        html.should.match(/id="join-wait-timeout-hint"/);
+        html.should.match(/id="join-wait-open-examples"/);
+    });
+
+    it('binds Enter inside an editableList row to add the next', function () {
+        html.should.match(/keydown[\s\S]*?Enter/);
+    });
+
+    it('runs jsonata-style validation on the correlation expression', function () {
+        html.should.match(/correlationValidator/);
+    });
+
+    it('puts a title attribute on each labelled form row', function () {
+        // Spot-check a handful of fields.
+        ['pathTopic', 'timeout', 'exactOrder', 'correlationTopic'].forEach(function (id) {
+            var pattern = new RegExp('for="node-input-' + id + '"[^>]*title=');
+            html.should.match(pattern);
+        });
+    });
 });

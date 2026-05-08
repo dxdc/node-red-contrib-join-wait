@@ -1,11 +1,11 @@
 <script type="text/x-red" data-template-name="join-wait">
     <div class="form-row">
-        <label for="node-input-name"><i class="fa fa-tag"></i> Name</label>
+        <label for="node-input-name" title="Display name for this node on the canvas."><i class="fa fa-tag"></i> Name</label>
         <input type="text" id="node-input-name" placeholder="Name">
     </div>
 
     <div class="form-row">
-        <label for="node-input-pathTopic"><i class="fa fa-bookmark-o"></i> Path field</label>
+        <label for="node-input-pathTopic" title="Message property whose value identifies the incoming path."><i class="fa fa-bookmark-o"></i> Path field</label>
         <input type="text" id="node-input-pathTopic" placeholder="topic">
         <input type="hidden" id="node-input-pathTopicType">
     </div>
@@ -16,16 +16,18 @@
     </div>
 
     <div class="form-row">
-        <label><i class="fa fa-code-fork"></i> Wait paths</label>
+        <label title="Path names to wait for; repeat an entry to require it n times."><i class="fa fa-code-fork"></i> Wait paths</label>
         <ol id="node-input-paths-container"></ol>
     </div>
-    <div class="form-tips" style="margin-bottom:12px">
+    <div class="form-tips" style="margin-bottom:6px">
         The set of paths whose arrival within the time window emits a
-        merged success output. May be repeated for n-of-the-same matching.
+        merged success output. Press <kbd>Enter</kbd> in a row to add the
+        next one. Repeat an entry to require n-of-the-same.
     </div>
+    <div class="form-tips" id="join-wait-output-preview" style="margin-bottom:12px; font-family:monospace; color:#888"></div>
 
     <div class="form-row">
-        <label for="node-input-timeout"><i class="fa fa-clock-o"></i> Timeout</label>
+        <label for="node-input-timeout" title="How long all wait paths have to arrive before the queue is expired."><i class="fa fa-clock-o"></i> Timeout</label>
         <input type="text" id="node-input-timeout" style="text-align:end; width:100px !important" placeholder="15">
         <select id="node-input-timeoutUnits" style="width:200px !important">
             <option value="1">Milliseconds</option>
@@ -35,9 +37,10 @@
             <option value="86400000">Days</option>
         </select>
     </div>
+    <div class="form-tips" id="join-wait-timeout-hint" style="margin-bottom:12px; color:#b07b00; display:none"></div>
 
     <div class="form-row">
-        <label for="node-input-exactOrder"><i class="fa fa-sort"></i> Match order</label>
+        <label for="node-input-exactOrder" title="Any order (default) or strict sequence."><i class="fa fa-sort"></i> Match order</label>
         <select id="node-input-exactOrder" style="width:70%; margin-right:5px;">
             <option value="false">Any order</option>
             <option value="true">Exact order</option>
@@ -45,7 +48,7 @@
     </div>
 
     <div class="form-row">
-        <label for="node-input-correlationTopic"><i class="fa fa-bookmark-o"></i> Group by</label>
+        <label for="node-input-correlationTopic" title="Optional. Property whose value groups related messages (e.g. msg._msgid)."><i class="fa fa-bookmark-o"></i> Group by</label>
         <input type="text" id="node-input-correlationTopic" placeholder="(none)">
         <input type="hidden" id="node-input-correlationTopicType">
     </div>
@@ -54,11 +57,18 @@
         e.g. <code>msg._msgid</code> when waiting on a single split flow.
     </div>
 
+    <div class="form-row" style="margin-bottom:14px">
+        <label></label>
+        <button type="button" id="join-wait-open-examples" class="red-ui-button">
+            <i class="fa fa-folder-open-o"></i> Open example flows
+        </button>
+    </div>
+
     <details style="margin-top:14px">
     <summary style="cursor:pointer; font-weight:bold; padding:6px 0">Advanced</summary>
 
     <div class="form-row" style="margin-top:10px">
-        <label><i class="fa fa-times-circle-o"></i> Reset paths</label>
+        <label title="Paths that immediately drain the queue to the expired output."><i class="fa fa-times-circle-o"></i> Reset paths</label>
         <ol id="node-input-pathsToExpire-container"></ol>
     </div>
     <div class="form-tips" style="margin-bottom:12px">
@@ -67,7 +77,7 @@
     </div>
 
     <div class="form-row">
-        <label for="node-input-firstMsg"><i class="fa fa-comments-o"></i> Output base</label>
+        <label for="node-input-firstMsg" title="Use the first or last message in the matched window as the base of the merged output."><i class="fa fa-comments-o"></i> Output base</label>
         <select id="node-input-firstMsg" style="width:70%; margin-right:5px;">
             <option value="true">First received message</option>
             <option value="false">Last received message</option>
@@ -75,46 +85,48 @@
     </div>
 
     <div class="form-row">
-        <label for="node-input-mapPayload"><i class="fa fa-arrow-right"></i> Merge values</label>
+        <label for="node-input-mapPayload" title="Keep the original Path-field values, or overwrite each with that message's payload."><i class="fa fa-arrow-right"></i> Merge values</label>
         <select id="node-input-mapPayload" style="width:70%; margin-right:5px;">
             <option value="false">Original Path field values</option>
             <option value="true">Each msg.payload</option>
         </select>
     </div>
 
-    <div class="form-row">
+    <div class="form-row" title="Treat each entry in Wait paths and Reset paths as a regular expression.">
         <label for="node-input-useRegex"></label>
         <input type="checkbox" id="node-input-useRegex" style="display:inline-block; width:22px; vertical-align:baseline; margin-right:6px;">
         <label for="node-input-useRegex" style="width:auto">Treat path entries as regular expressions</label>
     </div>
 
-    <div class="form-row">
+    <div class="form-row" title="Log a warning when a message arrives with a path that isn't in either list.">
         <label for="node-input-warnUnmatched"></label>
         <input type="checkbox" id="node-input-warnUnmatched" style="display:inline-block; width:22px; vertical-align:baseline; margin-right:6px;">
         <label for="node-input-warnUnmatched" style="width:auto">Log a warning for unmatched paths</label>
     </div>
 
-    <div class="form-row">
+    <div class="form-row" title="Disable the msg.complete short-circuit.">
         <label for="node-input-disableComplete"></label>
         <input type="checkbox" id="node-input-disableComplete" style="display:inline-block; width:22px; vertical-align:baseline; margin-right:6px;">
         <label for="node-input-disableComplete" style="width:auto">Ignore <code>msg.complete</code></label>
     </div>
 
-    <div class="form-row">
+    <div class="form-row" title="Save the queue to the context store on close so it survives redeploys (and full restarts when a persistent store is configured).">
         <label for="node-input-persistOnRestart"></label>
         <input type="checkbox" id="node-input-persistOnRestart" style="display:inline-block; width:22px; vertical-align:baseline; margin-right:6px;">
         <label for="node-input-persistOnRestart" style="width:auto">Preserve queue across deploys / restarts</label>
     </div>
 
     <div class="form-row">
-        <label for="node-input-persistStore"><i class="fa fa-database"></i> Persist store</label>
-        <input type="text" id="node-input-persistStore" placeholder="(default context store)">
+        <label for="node-input-persistStore" title="Override the context store used to persist the queue."><i class="fa fa-database"></i> Persist store</label>
+        <select id="node-input-persistStore" style="width:70%; margin-right:5px;">
+            <option value="">(default context store)</option>
+        </select>
     </div>
     <div class="form-tips" style="margin-bottom:12px">
-        Optional. Override the context store this node uses. Leave blank to
-        use the default store from <code>settings.js</code> — set that
-        default to a persistent store (e.g. <code>localfilesystem</code>) and
-        every join-wait node automatically survives full restarts.
+        Override the context store this node uses. Leave on default — set
+        the default to a persistent store (e.g. <code>localfilesystem</code>)
+        in <code>settings.js</code> and every join-wait node automatically
+        survives full restarts.
     </div>
     </details>
 </script>
@@ -152,6 +164,19 @@
             };
         }
 
+        function correlationValidator(v) {
+            // Empty / undefined / non-jsonata: nothing to validate here.
+            if (this.correlationTopicType !== 'jsonata' || !v) return true;
+            // jsonata is exposed as a global by the Node-RED editor.
+            if (typeof jsonata !== 'function') return true;
+            try {
+                jsonata(v);
+                return true;
+            } catch (err) {
+                return false;
+            }
+        }
+
         function isValidRegex(s) {
             try {
                 new RegExp(s);
@@ -181,23 +206,40 @@
             return true;
         }
 
-        function initEditableList(containerId, items) {
+        function initEditableList(containerId, items, opts) {
             var $container = $('#' + containerId);
             $container.css({ 'min-height': '100px' });
+            var placeholder = (opts && opts.placeholder) || 'e.g. sensor_1';
             $container.editableList({
                 addItem: function (row, index, data) {
                     var value = (data && data.value) || '';
                     row.css({ overflow: 'hidden', whiteSpace: 'nowrap' });
                     var input = $('<input/>', {
                         type: 'text',
-                        placeholder: 'path name',
+                        placeholder: placeholder,
                         style: 'width:100%',
                     }).val(value);
                     input.on('input change blur', function () {
                         validateRow(input);
+                        if (opts && opts.onChange) opts.onChange();
+                    });
+                    // Pressing Enter in a row adds the next one.
+                    input.on('keydown', function (e) {
+                        if (e.key === 'Enter' || e.keyCode === 13) {
+                            e.preventDefault();
+                            $container.editableList('addItem', { value: '' });
+                            // Focus the newly-added row.
+                            setTimeout(function () {
+                                $container.editableList('items').last().find('input').trigger('focus');
+                            }, 0);
+                        }
                     });
                     row.append(input);
                     validateRow(input);
+                    if (opts && opts.onChange) opts.onChange();
+                },
+                removeItem: function () {
+                    if (opts && opts.onChange) opts.onChange();
                 },
                 removable: true,
                 sortable: true,
@@ -245,6 +287,78 @@
             return [];
         }
 
+        // Render a tiny preview of what msg.<pathField> looks like on the
+        // success output, derived from the current Wait paths list.
+        function updateOutputPreview() {
+            var paths = readEditableList('node-input-paths-container');
+            var unique = [];
+            paths.forEach(function (p) {
+                if (unique.indexOf(p) === -1) unique.push(p);
+            });
+            var pathField = $('#node-input-pathTopic').val() || 'topic';
+            var $tip = $('#join-wait-output-preview');
+            if (unique.length === 0) {
+                $tip.text('');
+                return;
+            }
+            var entries = unique.slice(0, 4).map(function (p) {
+                return p + ': …';
+            });
+            if (unique.length > 4) entries.push('…');
+            $tip.text('→ msg.' + pathField + ' = { ' + entries.join(', ') + ' }');
+        }
+
+        // Warn when the resolved timeout is impractically short (the README
+        // recommends padding ~5–10 ms for evaluation overhead).
+        function updateTimeoutHint() {
+            var t = Number($('#node-input-timeout').val()) || 0;
+            var u = Number($('#node-input-timeoutUnits').val()) || 1;
+            var ms = t * u;
+            var $hint = $('#join-wait-timeout-hint');
+            if (ms > 0 && ms < 50) {
+                $hint.text('Very short — pad ~10 ms to leave room for evaluation overhead.').show();
+            } else {
+                $hint.hide();
+            }
+        }
+
+        // Populate the Persist store <select> from the runtime via our
+        // /join-wait/stores admin route. Falls back gracefully if the route
+        // is unreachable or returns nothing useful.
+        function populatePersistStores(currentValue) {
+            var $sel = $('#node-input-persistStore');
+            $.getJSON('join-wait/stores')
+                .done(function (stores) {
+                    if (!Array.isArray(stores) || stores.length === 0) return;
+                    stores.forEach(function (s) {
+                        if (s.name === 'default') return; // already represented as the blank option
+                        var label = s.module ? s.name + ' (' + s.module + ')' : s.name;
+                        $('<option/>').val(s.name).text(label).appendTo($sel);
+                    });
+                    // If the saved value isn't in the list, append it so we
+                    // don't silently drop a user-provided override.
+                    if (currentValue && !$sel.find('option[value="' + currentValue + '"]').length) {
+                        $('<option/>')
+                            .val(currentValue)
+                            .text(currentValue + ' (not configured)')
+                            .appendTo($sel);
+                    }
+                    $sel.val(currentValue || '');
+                })
+                .fail(function () {
+                    // Admin route not reachable — leave the select with just
+                    // its default option.
+                });
+        }
+
+        function openExamplesDialog() {
+            // Open the import dialog; the user picks Examples → join-wait.
+            // RED.actions exposes core actions across recent Node-RED versions.
+            if (RED.actions && typeof RED.actions.invoke === 'function') {
+                RED.actions.invoke('core:show-import-dialog');
+            }
+        }
+
         RED.nodes.registerType('join-wait', {
             category: 'function',
             color: '#8baac7',
@@ -256,7 +370,7 @@
                 warnUnmatched: { value: true },
                 pathTopic: { value: 'topic', required: true },
                 pathTopicType: { value: 'msg' },
-                correlationTopic: { value: '' },
+                correlationTopic: { value: '', validate: correlationValidator },
                 correlationTopicType: { value: 'undefined' },
                 timeout: {
                     value: 15000,
@@ -306,9 +420,24 @@
                 });
                 $('#node-input-timeout').spinner({ min: 1 });
 
-                initEditableList('node-input-paths-container', toArray(this.paths));
-                initEditableList('node-input-pathsToExpire-container', toArray(this.pathsToExpire));
+                initEditableList('node-input-paths-container', toArray(this.paths), {
+                    placeholder: 'e.g. sensor_1',
+                    onChange: updateOutputPreview,
+                });
+                initEditableList('node-input-pathsToExpire-container', toArray(this.pathsToExpire), {
+                    placeholder: 'e.g. abort',
+                });
                 rebindRegexValidation();
+
+                $('#node-input-pathTopic').on('change input', updateOutputPreview);
+                updateOutputPreview();
+
+                $('#node-input-timeout, #node-input-timeoutUnits').on('change input', updateTimeoutHint);
+                updateTimeoutHint();
+
+                populatePersistStores(this.persistStore);
+
+                $('#join-wait-open-examples').on('click', openExamplesDialog);
             },
             oneditsave: function () {
                 this.paths = readEditableList('node-input-paths-container');

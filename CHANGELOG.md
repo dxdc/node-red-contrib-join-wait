@@ -21,7 +21,29 @@ and this project adheres to [Semantic Versioning](https://semver.org/).
 - **Editor UX overhaul.** Wait paths and reset paths now use Node-RED's
   `editableList` widget — add/remove/reorder rows instead of typing JSON
   arrays into a text box. Each row now validates inline (empty / invalid
-  regex are flagged red with a tooltip).
+  regex are flagged red with a tooltip). Pressing <kbd>Enter</kbd> in a
+  row adds the next one.
+- **Persist store as a dropdown.** A new `/join-wait/stores` admin route
+  exposes the configured context stores; the editor populates the
+  Persist store field as a `<select>` showing each store's resolved
+  module (e.g. `file (localfilesystem)`). Eliminates typos and surfaces
+  available stores.
+- **Tooltips on every field label.** Hover-discoverable explanations
+  (`title` attributes) for every form row.
+- **Inline output-shape preview.** Under Wait paths, a small monospace
+  line shows what the merged success message looks like
+  (`→ msg.topic = { path_1: …, path_2: … }`), updating as the list
+  changes.
+- **Smart timeout warning.** When the resolved timeout is under 50 ms,
+  a yellow tip surfaces the README guidance about padding evaluation
+  overhead.
+- **Inline jsonata validation on Group by.** When the field type is
+  `jsonata`, the expression is parsed at edit-time and the field marks
+  invalid before the first message even arrives.
+- **Quick "Open example flows" button** in the editor opens the import
+  dialog directly.
+- Path-row placeholders changed from generic `path name` to a worked
+  example (`e.g. sensor_1`, `e.g. abort`) so empty rows hint at intent.
 - **Status-indicator error states.** Validation, regex compile, and
   correlator-evaluation failures now show a red ring on the node with a
   short reason in addition to the usual `node.error` log entry.

@@ -439,4 +439,18 @@ module.exports = function (RED) {
     }
 
     RED.nodes.registerType('join-wait', JoinWaitNode);
+
+    // Admin endpoint backing the "Persist store" dropdown in the editor.
+    // Returns the configured context stores so the UI can render a typo-proof
+    // <select> rather than a free-text field.
+    RED.httpAdmin.get('/join-wait/stores', RED.auth.needsPermission('flows.read'), function (req, res) {
+        const cs = (RED.settings && RED.settings.contextStorage) || {};
+        const out = [];
+        for (const name of Object.keys(cs)) {
+            const entry = cs[name];
+            const m = typeof entry === 'string' ? entry : entry && entry.module;
+            out.push({ name: name, module: m || null });
+        }
+        res.json(out);
+    });
 };
