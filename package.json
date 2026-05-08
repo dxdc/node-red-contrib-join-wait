@@ -1,6 +1,6 @@
 {
     "name": "node-red-contrib-join-wait",
-    "version": "0.6.0",
+    "version": "0.6.1",
     "description": "Node-RED node that joins related messages across multiple paths within a time window — with exact-order matching, regex paths, correlation grouping, reset paths, and queue persistence. Coordinate parallel flows, synchronize events, and debounce sensors.",
     "author": "Daniel Caspi <dan@element26.net>",
     "license": "MIT",
