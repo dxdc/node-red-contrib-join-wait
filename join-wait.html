@@ -295,8 +295,10 @@
             return [];
         }
 
-        // Render a tiny preview of what msg.<pathField> looks like on the
-        // success output, derived from the current Wait paths list.
+        // Render a tiny preview of what the path-field property looks
+        // like on the success output, derived from the current Wait paths
+        // list. Prefix matches the typed-input type so flow/global don't
+        // mis-render as msg.
         function updateOutputPreview() {
             var paths = readEditableList('node-input-paths-container');
             var unique = [];
@@ -304,6 +306,7 @@
                 if (unique.indexOf(p) === -1) unique.push(p);
             });
             var pathField = $('#node-input-pathTopic').val() || 'topic';
+            var pathType = $('#node-input-pathTopicType').val() || 'msg';
             var $tip = $('#join-wait-output-preview');
             if (unique.length === 0) {
                 $tip.text('');
@@ -313,7 +316,7 @@
                 return p + ': …';
             });
             if (unique.length > 4) entries.push('…');
-            $tip.text('→ msg.' + pathField + ' = { ' + entries.join(', ') + ' }');
+            $tip.text('→ ' + pathType + '.' + pathField + ' = { ' + entries.join(', ') + ' }');
         }
 
         // Warn when the resolved timeout is impractically short (the README
@@ -331,14 +334,16 @@
         }
 
         // Populate the Persist store <select> from the runtime via our
-        // /join-wait/stores admin route. Falls back gracefully if the route
-        // is unreachable or returns nothing useful.
+        // /join-wait/stores admin route. apiRootUrl prefixes the call so
+        // it resolves correctly under custom httpAdminRoot / reverse
+        // proxies; falls back to the bare relative URL on older
+        // Node-RED versions where the setting isn't exposed.
         function populatePersistStores(currentValue) {
             var $sel = $('#node-input-persistStore');
-            $.getJSON('join-wait/stores')
+            var base = (RED.settings && RED.settings.apiRootUrl) || '';
+            $.getJSON(base + 'join-wait/stores')
                 .done(function (stores) {
-                    if (!Array.isArray(stores) || stores.length === 0) return;
-                    stores.forEach(function (s) {
+                    (Array.isArray(stores) ? stores : []).forEach(function (s) {
                         if (s.name === 'default') return; // already represented as the blank option
                         var label = s.module ? s.name + ' (' + s.module + ')' : s.name;
                         $('<option/>').val(s.name).text(label).appendTo($sel);
@@ -354,8 +359,16 @@
                     $sel.val(currentValue || '');
                 })
                 .fail(function () {
-                    // Admin route not reachable — leave the select with just
-                    // its default option.
+                    // Admin route not reachable. Preserve the saved
+                    // value as an explicit option so the dropdown doesn't
+                    // silently overwrite persistStore with '' on save.
+                    if (currentValue) {
+                        $('<option/>')
+                            .val(currentValue)
+                            .text(currentValue + ' (stores list unavailable)')
+                            .appendTo($sel);
+                        $sel.val(currentValue);
+                    }
                 });
         }
 
@@ -586,8 +599,12 @@
         is kept in the merged output.</li>
         <li>Pad <b>Timeout</b> with a small overhead (~5–10&nbsp;ms) for
         evaluation time when working with very short windows.</li>
-        <li>When <b>Preserve queue</b> is on, the queue is saved to a JSON
-        file under <code>{userDir}/join-wait/{nodeId}.json</code> on close
-        and reloaded on next start.</li>
+        <li>When <b>Preserve queue</b> is on, the queue is written to the
+        node's context on close (and reloaded on the next start). With
+        the default in-memory store this only survives a redeploy; for
+        full restart persistence, point <b>Persist store</b> at a
+        store backed by <code>localfilesystem</code> (or any persistent
+        module) configured under <code>contextStorage</code> in
+        <code>settings.js</code>.</li>
     </ul>
 </script>
