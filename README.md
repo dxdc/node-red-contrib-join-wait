@@ -61,6 +61,11 @@ you want to wait for. That's it.
 > Looking for a working flow? After install, open
 > **Menu → Import → Examples → join-wait** for ready-made flows.
 
+> **Tip:** in the **Wait paths** / **Reset paths** lists you can press
+> <kbd>Enter</kbd> in a row to add the next one, and paste newline-separated
+> text into any row to fill the current row and append the rest as new
+> rows — handy for seeding a list from a spreadsheet column or a debug log.
+
 ## How it works
 
 ```

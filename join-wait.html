@@ -15,8 +15,10 @@
         or an object with multiple keys.
     </div>
 
-    <div class="form-row">
+    <div class="form-row" style="margin-bottom:4px">
         <label title="Path names to wait for; repeat an entry to require it n times."><i class="fa fa-code-fork"></i> Wait paths</label>
+    </div>
+    <div class="form-row node-input-paths-container-row">
         <ol id="node-input-paths-container"></ol>
     </div>
     <div class="form-tips" style="margin-bottom:6px">
@@ -24,12 +26,12 @@
         merged success output. Press <kbd>Enter</kbd> in a row to add the
         next one. Repeat an entry to require n-of-the-same.
     </div>
-    <div class="form-tips" id="join-wait-output-preview" style="margin-bottom:12px; font-family:monospace; color:#888"></div>
+    <div class="form-tips" id="join-wait-output-preview" style="margin-bottom:12px; font-family:var(--red-ui-monospace-font, monospace)"></div>
 
     <div class="form-row">
         <label for="node-input-timeout" title="How long all wait paths have to arrive before the queue is expired."><i class="fa fa-clock-o"></i> Timeout</label>
-        <input type="text" id="node-input-timeout" style="text-align:end; width:100px !important" placeholder="15">
-        <select id="node-input-timeoutUnits" style="width:200px !important">
+        <input type="text" id="node-input-timeout" style="text-align:end; width:90px" placeholder="15">
+        <select id="node-input-timeoutUnits" style="width:160px; margin-left:5px">
             <option value="1">Milliseconds</option>
             <option value="1000">Seconds</option>
             <option value="60000">Minutes</option>
@@ -37,11 +39,13 @@
             <option value="86400000">Days</option>
         </select>
     </div>
-    <div class="form-tips" id="join-wait-timeout-hint" style="margin-bottom:12px; color:#b07b00; display:none"></div>
+    <div class="form-tips" id="join-wait-timeout-hint" style="margin-bottom:12px; color:#b07b00; display:none">
+        <i class="fa fa-exclamation-triangle"></i> <span></span>
+    </div>
 
     <div class="form-row">
         <label for="node-input-exactOrder" title="Any order (default) or strict sequence."><i class="fa fa-sort"></i> Match order</label>
-        <select id="node-input-exactOrder" style="width:70%; margin-right:5px;">
+        <select id="node-input-exactOrder" style="width:70%">
             <option value="false">Any order</option>
             <option value="true">Exact order</option>
         </select>
@@ -64,11 +68,13 @@
         </button>
     </div>
 
-    <details style="margin-top:14px">
-    <summary style="cursor:pointer; font-weight:bold; padding:6px 0">Advanced</summary>
+    <details class="join-wait-advanced" style="margin-top:14px">
+    <summary style="cursor:pointer; font-weight:bold; padding:6px 0; color:var(--red-ui-header-text-color, inherit)">Advanced</summary>
 
-    <div class="form-row" style="margin-top:10px">
+    <div class="form-row" style="margin-top:10px; margin-bottom:4px">
         <label title="Paths that immediately drain the queue to the expired output."><i class="fa fa-times-circle-o"></i> Reset paths</label>
+    </div>
+    <div class="form-row node-input-pathsToExpire-container-row">
         <ol id="node-input-pathsToExpire-container"></ol>
     </div>
     <div class="form-tips" style="margin-bottom:12px">
@@ -78,7 +84,7 @@
 
     <div class="form-row">
         <label for="node-input-firstMsg" title="Use the first or last message in the matched window as the base of the merged output."><i class="fa fa-comments-o"></i> Output base</label>
-        <select id="node-input-firstMsg" style="width:70%; margin-right:5px;">
+        <select id="node-input-firstMsg" style="width:70%">
             <option value="true">First received message</option>
             <option value="false">Last received message</option>
         </select>
@@ -86,7 +92,7 @@
 
     <div class="form-row">
         <label for="node-input-mapPayload" title="Keep the original Path-field values, or overwrite each with that message's payload."><i class="fa fa-arrow-right"></i> Merge values</label>
-        <select id="node-input-mapPayload" style="width:70%; margin-right:5px;">
+        <select id="node-input-mapPayload" style="width:70%">
             <option value="false">Original Path field values</option>
             <option value="true">Each msg.payload</option>
         </select>
@@ -116,13 +122,13 @@
         <label for="node-input-persistOnRestart" style="width:auto">Preserve queue across deploys / restarts</label>
     </div>
 
-    <div class="form-row">
+    <div class="form-row" id="join-wait-persist-store-row">
         <label for="node-input-persistStore" title="Override the context store used to persist the queue."><i class="fa fa-database"></i> Persist store</label>
-        <select id="node-input-persistStore" style="width:70%; margin-right:5px;">
+        <select id="node-input-persistStore" style="width:70%">
             <option value="">(default context store)</option>
         </select>
     </div>
-    <div class="form-tips" style="margin-bottom:12px">
+    <div class="form-tips" id="join-wait-persist-store-tip" style="margin-bottom:12px">
         Override the context store this node uses. Leave on default — set
         the default to a persistent store (e.g. <code>localfilesystem</code>)
         in <code>settings.js</code> and every join-wait node automatically
@@ -133,6 +139,48 @@
 
 <script type="text/javascript">
     (function () {
+        // Form-element selectors gathered in one place. Keeps the rest
+        // of the IIFE free of stringly-typed `#node-input-*` lookups
+        // and makes the editor surface auditable at a glance — every
+        // hook into the dialog is listed here.
+        var SEL = {
+            pathField: '#node-input-pathTopic',
+            pathFieldType: '#node-input-pathTopicType',
+            correlator: '#node-input-correlationTopic',
+            correlatorType: '#node-input-correlationTopicType',
+            timeout: '#node-input-timeout',
+            timeoutUnits: '#node-input-timeoutUnits',
+            useRegex: '#node-input-useRegex',
+            persistOnRestart: '#node-input-persistOnRestart',
+            persistStore: '#node-input-persistStore',
+            outputPreview: '#join-wait-output-preview',
+            timeoutHint: '#join-wait-timeout-hint',
+            examplesButton: '#join-wait-open-examples',
+            persistStoreRow: '#join-wait-persist-store-row',
+            persistStoreTip: '#join-wait-persist-store-tip',
+            dialogForm: '#dialog-form',
+            advancedDetails: '#dialog-form details',
+        };
+        // editableList wrapper IDs (no leading '#'); consumers either
+        // pass them to readEditableList or interpolate `#` themselves.
+        var LIST_ID = {
+            paths: 'node-input-paths-container',
+            expire: 'node-input-pathsToExpire-container',
+        };
+        function listInputs(id) {
+            return $('#' + id + ' input[type=text]');
+        }
+        // Read the typed-input pair behind the Path field — name + type.
+        // Used wherever both halves are needed together (currently the
+        // output preview); centralising it avoids drift between the two
+        // selectors.
+        function readPathField() {
+            return {
+                name: $(SEL.pathField).val() || 'topic',
+                type: $(SEL.pathFieldType).val() || 'msg',
+            };
+        }
+
         function arrayValidator(allowEmpty, requireUnique) {
             return function (v) {
                 // Accept legacy JSON-string format too, for back-compat with old flows.
@@ -191,25 +239,82 @@
             input.attr('title', ok ? '' : message || '');
         }
 
-        function validateRow(input) {
-            var $useRegex = $('#node-input-useRegex');
-            var v = String(input.val() || '');
-            if (v === '') {
+        // Single-row validation: empty / invalid regex. List-level
+        // checks (uniqueness, cross-list overlap) live in validateAllRows
+        // because they need both lists' current values in scope.
+        function validateRow(input, ownValues, otherValues, opts) {
+            var requireUnique = opts && opts.requireUnique;
+            var otherListLabel = (opts && opts.otherListLabel) || '';
+            var value = String(input.val() || '');
+            if (value === '') {
                 setRowValid(input, false, 'path name cannot be empty');
                 return false;
             }
-            if ($useRegex.is(':checked') && !isValidRegex(v)) {
+            if ($(SEL.useRegex).is(':checked') && !isValidRegex(value)) {
                 setRowValid(input, false, 'invalid regular expression');
+                return false;
+            }
+            if (
+                requireUnique &&
+                ownValues &&
+                ownValues.filter(function (x) {
+                    return x === value;
+                }).length > 1
+            ) {
+                setRowValid(input, false, 'duplicate entry — must be unique');
+                return false;
+            }
+            if (otherValues && otherValues.indexOf(value) !== -1) {
+                setRowValid(
+                    input,
+                    false,
+                    '"' + value + '" is also in ' + otherListLabel + " — paths shouldn't overlap",
+                );
                 return false;
             }
             setRowValid(input, true);
             return true;
         }
 
+        // Re-validate every row in both editableLists. Called whenever
+        // any row changes, the regex toggle flips, or rows are added /
+        // removed — so duplicate and cross-list overlap warnings are
+        // always in sync with the current state.
+        function validateAllRows() {
+            var $paths = listInputs(LIST_ID.paths);
+            var $expire = listInputs(LIST_ID.expire);
+            var pathValues = $paths
+                .map(function () {
+                    return String($(this).val() || '');
+                })
+                .get();
+            var expireValues = $expire
+                .map(function () {
+                    return String($(this).val() || '');
+                })
+                .get();
+            $paths.each(function () {
+                validateRow($(this), pathValues, expireValues, {
+                    requireUnique: false,
+                    otherListLabel: 'Reset paths',
+                });
+            });
+            $expire.each(function () {
+                validateRow($(this), expireValues, pathValues, {
+                    requireUnique: true,
+                    otherListLabel: 'Wait paths',
+                });
+            });
+        }
+
         function initEditableList(containerId, items, opts) {
             var $container = $('#' + containerId);
-            $container.css({ 'min-height': '100px' });
             var placeholder = (opts && opts.placeholder) || 'e.g. sensor_1';
+            // A numeric height makes editableList scroll its items
+            // internally past the limit — without it (height:'auto'), a
+            // long list grows the wrapper and visually overlaps the form
+            // rows that follow. The actual height is recomputed in
+            // oneditresize to fill the available tray space.
             $container.editableList({
                 addItem: function (row, index, data) {
                     var value = (data && data.value) || '';
@@ -220,7 +325,7 @@
                         style: 'width:100%',
                     }).val(value);
                     input.on('input change blur', function () {
-                        validateRow(input);
+                        validateAllRows();
                         if (opts && opts.onChange) opts.onChange();
                     });
                     // Pressing Enter in a row adds the next one.
@@ -234,16 +339,44 @@
                             }, 0);
                         }
                     });
+                    // Bulk-paste: paste newline-separated text into any
+                    // row to fill the current row + add a new row per
+                    // remaining line. Whitespace-only and empty lines
+                    // are dropped. Single-line pastes fall through to
+                    // the browser's default paste handling.
+                    input.on('paste', function (e) {
+                        var clip = (e.originalEvent || e).clipboardData;
+                        if (!clip) return;
+                        var text = clip.getData('text');
+                        if (!text || !/[\r\n]/.test(text)) return;
+                        var lines = text
+                            .split(/\r?\n/)
+                            .map(function (s) {
+                                return s.trim();
+                            })
+                            .filter(function (s) {
+                                return s.length > 0;
+                            });
+                        if (lines.length === 0) return;
+                        e.preventDefault();
+                        input.val(lines[0]);
+                        for (var i = 1; i < lines.length; i++) {
+                            $container.editableList('addItem', { value: lines[i] });
+                        }
+                        validateAllRows();
+                        if (opts && opts.onChange) opts.onChange();
+                    });
                     row.append(input);
-                    validateRow(input);
+                    validateAllRows();
                     if (opts && opts.onChange) opts.onChange();
                 },
                 removeItem: function () {
+                    validateAllRows();
                     if (opts && opts.onChange) opts.onChange();
                 },
                 removable: true,
                 sortable: true,
-                height: 'auto',
+                height: (opts && opts.height) || 200,
             });
             (items || []).forEach(function (v) {
                 $container.editableList('addItem', { value: v });
@@ -252,14 +385,7 @@
 
         // Re-validate every editableList row when the regex toggle flips.
         function rebindRegexValidation() {
-            $('#node-input-useRegex').on('change', function () {
-                $(
-                    '#node-input-paths-container input[type=text], ' +
-                        '#node-input-pathsToExpire-container input[type=text]',
-                ).each(function () {
-                    validateRow($(this));
-                });
-            });
+            $(SEL.useRegex).on('change', validateAllRows);
         }
 
         function readEditableList(containerId) {
@@ -287,50 +413,58 @@
             return [];
         }
 
-        // Render a tiny preview of what msg.<pathField> looks like on the
-        // success output, derived from the current Wait paths list.
+        // Render a tiny preview of what the path-field property looks
+        // like on the success output, derived from the current Wait paths
+        // list. Prefix matches the typed-input type so flow/global don't
+        // mis-render as msg. Repeated entries surface as `(×n)` so the
+        // n-of-the-same semantic is visible.
         function updateOutputPreview() {
-            var paths = readEditableList('node-input-paths-container');
-            var unique = [];
+            var paths = readEditableList(LIST_ID.paths);
+            var counts = Object.create(null);
+            var order = [];
             paths.forEach(function (p) {
-                if (unique.indexOf(p) === -1) unique.push(p);
+                if (counts[p] === undefined) order.push(p);
+                counts[p] = (counts[p] || 0) + 1;
             });
-            var pathField = $('#node-input-pathTopic').val() || 'topic';
-            var $tip = $('#join-wait-output-preview');
-            if (unique.length === 0) {
+            var field = readPathField();
+            var $tip = $(SEL.outputPreview);
+            if (order.length === 0) {
                 $tip.text('');
                 return;
             }
-            var entries = unique.slice(0, 4).map(function (p) {
-                return p + ': …';
+            var entries = order.slice(0, 4).map(function (p) {
+                return counts[p] > 1 ? p + ' (×' + counts[p] + '): …' : p + ': …';
             });
-            if (unique.length > 4) entries.push('…');
-            $tip.text('→ msg.' + pathField + ' = { ' + entries.join(', ') + ' }');
+            if (order.length > 4) entries.push('…');
+            $tip.text('→ ' + field.type + '.' + field.name + ' = { ' + entries.join(', ') + ' }');
         }
 
         // Warn when the resolved timeout is impractically short (the README
         // recommends padding ~5–10 ms for evaluation overhead).
         function updateTimeoutHint() {
-            var t = Number($('#node-input-timeout').val()) || 0;
-            var u = Number($('#node-input-timeoutUnits').val()) || 1;
+            var t = Number($(SEL.timeout).val()) || 0;
+            var u = Number($(SEL.timeoutUnits).val()) || 1;
             var ms = t * u;
-            var $hint = $('#join-wait-timeout-hint');
+            var $hint = $(SEL.timeoutHint);
             if (ms > 0 && ms < 50) {
-                $hint.text('Very short — pad ~10 ms to leave room for evaluation overhead.').show();
+                $hint.find('span').text('Very short — pad ~10 ms to leave room for evaluation overhead.');
+                $hint.show();
             } else {
                 $hint.hide();
             }
         }
 
         // Populate the Persist store <select> from the runtime via our
-        // /join-wait/stores admin route. Falls back gracefully if the route
-        // is unreachable or returns nothing useful.
+        // /join-wait/stores admin route. apiRootUrl prefixes the call so
+        // it resolves correctly under custom httpAdminRoot / reverse
+        // proxies; falls back to the bare relative URL on older
+        // Node-RED versions where the setting isn't exposed.
         function populatePersistStores(currentValue) {
-            var $sel = $('#node-input-persistStore');
-            $.getJSON('join-wait/stores')
+            var $sel = $(SEL.persistStore);
+            var base = (RED.settings && RED.settings.apiRootUrl) || '';
+            $.getJSON(base + 'join-wait/stores')
                 .done(function (stores) {
-                    if (!Array.isArray(stores) || stores.length === 0) return;
-                    stores.forEach(function (s) {
+                    (Array.isArray(stores) ? stores : []).forEach(function (s) {
                         if (s.name === 'default') return; // already represented as the blank option
                         var label = s.module ? s.name + ' (' + s.module + ')' : s.name;
                         $('<option/>').val(s.name).text(label).appendTo($sel);
@@ -346,25 +480,52 @@
                     $sel.val(currentValue || '');
                 })
                 .fail(function () {
-                    // Admin route not reachable — leave the select with just
-                    // its default option.
+                    // Admin route not reachable. Preserve the saved
+                    // value as an explicit option so the dropdown doesn't
+                    // silently overwrite persistStore with '' on save.
+                    if (currentValue) {
+                        $('<option/>')
+                            .val(currentValue)
+                            .text(currentValue + ' (stores list unavailable)')
+                            .appendTo($sel);
+                        $sel.val(currentValue);
+                    }
                 });
         }
 
+        // Last `size` handed to oneditresize. Cached so the <details>
+        // toggle handler can re-run the resize math without waiting for
+        // the next tray drag.
+        var lastTraySize = null;
+
+        // Stretch the Wait paths editableList to fill the tray. Mirrors
+        // the pattern in Node-RED core (switch/change/httprequest):
+        // subtract every other row's outer height from the tray height
+        // and give the remainder to the list. The :visible filter mirrors
+        // httprequest so hidden rows (e.g. timeout-hint) are skipped
+        // explicitly. No upper clamp — when the user drags the tray
+        // taller they want to see more rows.
+        function resizePathsList() {
+            var $form = $(SEL.dialogForm);
+            if (!$form.length || !lastTraySize || !lastTraySize.height) return;
+            var height = lastTraySize.height;
+            $form.children(':not(.node-input-paths-container-row)').each(function () {
+                var $r = $(this);
+                if ($r.is(':visible')) height -= $r.outerHeight(true) || 0;
+            });
+            height -= 12; // breathing room for margins/padding the loop misses
+            if (height < 140) height = 140;
+            $('#' + LIST_ID.paths).editableList('height', height);
+        }
+
         function openExamplesDialog() {
-            // The edit tray is on top of the editor, so the import tray
-            // can't surface beneath it. Close this tray first (which cancels
-            // the in-flight edit), then invoke the core import dialog so the
-            // user can pick Examples → join-wait.
-            var invoke = function () {
-                if (RED.actions && typeof RED.actions.invoke === 'function') {
-                    RED.actions.invoke('core:show-import-dialog');
-                }
-            };
-            if (RED.tray && typeof RED.tray.close === 'function') {
-                RED.tray.close(invoke);
-            } else {
-                invoke();
+            // The import dialog opens as a modal above the edit tray, so
+            // the user can pick a flow and on close return to this edit
+            // dialog with in-flight edits intact. The earlier approach of
+            // closing the tray first was unreliable (close-callback drops
+            // when stack races editor teardown).
+            if (RED.actions && typeof RED.actions.invoke === 'function') {
+                RED.actions.invoke('core:show-examples-import-dialog');
             }
         }
 
@@ -411,14 +572,14 @@
                 return this.name ? 'node_label_italic' : '';
             },
             oneditprepare: function () {
-                $('#node-input-pathTopic').typedInput({
+                $(SEL.pathField).typedInput({
                     default: this.pathTopicType || 'msg',
-                    typeField: $('#node-input-pathTopicType'),
+                    typeField: $(SEL.pathFieldType),
                     types: ['msg', 'flow', 'global'],
                 });
-                $('#node-input-correlationTopic').typedInput({
+                $(SEL.correlator).typedInput({
                     default: this.correlationTopicType || 'undefined',
-                    typeField: $('#node-input-correlationTopicType'),
+                    typeField: $(SEL.correlatorType),
                     types: [
                         { value: 'undefined', label: RED._('common.type.undefined'), hasValue: false },
                         'msg',
@@ -427,34 +588,57 @@
                         'jsonata',
                     ],
                 });
-                $('#node-input-timeout').spinner({ min: 1 });
+                // Spinner accepts decimals (1.5 seconds, 0.25 hours, …)
+                // — the runtime multiplies the value by the unit factor,
+                // so fractional units are valid. step:1 keeps the up/down
+                // arrows snappy for the common integer case.
+                $(SEL.timeout).spinner({ min: 0.001, step: 1, numberFormat: 'n' });
 
-                initEditableList('node-input-paths-container', toArray(this.paths), {
+                initEditableList(LIST_ID.paths, toArray(this.paths), {
                     placeholder: 'e.g. sensor_1',
                     onChange: updateOutputPreview,
+                    height: 200,
                 });
-                initEditableList('node-input-pathsToExpire-container', toArray(this.pathsToExpire), {
+                initEditableList(LIST_ID.expire, toArray(this.pathsToExpire), {
                     placeholder: 'e.g. abort',
+                    height: 140,
                 });
                 rebindRegexValidation();
 
-                $('#node-input-pathTopic').on('change input', updateOutputPreview);
+                $(SEL.pathField).on('change input', updateOutputPreview);
                 updateOutputPreview();
 
-                $('#node-input-timeout, #node-input-timeoutUnits').on('change input', updateTimeoutHint);
+                $(SEL.timeout + ', ' + SEL.timeoutUnits).on('change input', updateTimeoutHint);
                 updateTimeoutHint();
 
                 populatePersistStores(this.persistStore);
 
-                $('#join-wait-open-examples').on('click', openExamplesDialog);
+                // Hide the Persist store row when Preserve queue is off —
+                // the override is meaningless without persistence enabled.
+                var $persistRow = $(SEL.persistStoreRow + ', ' + SEL.persistStoreTip);
+                function syncPersistStoreVisibility() {
+                    $persistRow.toggle($(SEL.persistOnRestart).is(':checked'));
+                    resizePathsList();
+                }
+                $(SEL.persistOnRestart).on('change', syncPersistStoreVisibility);
+                syncPersistStoreVisibility();
+
+                $(SEL.examplesButton).on('click', openExamplesDialog);
+
+                // Re-run the editableList resize math when Advanced is
+                // expanded/collapsed — oneditresize only fires on tray
+                // drag, so without this the Wait paths list keeps the
+                // height it had before the toggle and doesn't reclaim
+                // (or yield) space.
+                $(SEL.advancedDetails).on('toggle', resizePathsList);
             },
             oneditsave: function () {
-                this.paths = readEditableList('node-input-paths-container');
-                this.pathsToExpire = readEditableList('node-input-pathsToExpire-container');
+                this.paths = readEditableList(LIST_ID.paths);
+                this.pathsToExpire = readEditableList(LIST_ID.expire);
             },
-            oneditresize: function () {
-                $('#node-input-paths-container').css('min-height', '100px');
-                $('#node-input-pathsToExpire-container').css('min-height', '60px');
+            oneditresize: function (size) {
+                lastTraySize = size;
+                resizePathsList();
             },
         });
     })();
@@ -550,8 +734,12 @@
         is kept in the merged output.</li>
         <li>Pad <b>Timeout</b> with a small overhead (~5–10&nbsp;ms) for
         evaluation time when working with very short windows.</li>
-        <li>When <b>Preserve queue</b> is on, the queue is saved to a JSON
-        file under <code>{userDir}/join-wait/{nodeId}.json</code> on close
-        and reloaded on next start.</li>
+        <li>When <b>Preserve queue</b> is on, the queue is written to the
+        node's context on close (and reloaded on the next start). With
+        the default in-memory store this only survives a redeploy; for
+        full restart persistence, point <b>Persist store</b> at a
+        store backed by <code>localfilesystem</code> (or any persistent
+        module) configured under <code>contextStorage</code> in
+        <code>settings.js</code>.</li>
     </ul>
 </script>
