@@ -135,7 +135,8 @@ describe('editor HTML', function () {
 
     it('cross-validates Wait paths and Reset paths', function () {
         // validateAllRows runs after every change so duplicate-in-Reset
-        // and overlap-with-Wait warnings stay in sync.
-        html.should.match(/function validateAllRows/);
+        // and overlap-with-Wait warnings stay in sync. Match either a
+        // `function`-declaration or arrow-function form.
+        html.should.match(/(?:function validateAllRows|validateAllRows\s*=\s*\(?\s*\)?\s*=>)/);
     });
 });
