@@ -1,6 +1,6 @@
 {
     "name": "node-red-contrib-join-wait",
-    "version": "0.6.2",
+    "version": "0.6.3",
     "description": "Node-RED node that joins related messages across multiple paths within a time window — with exact-order matching, regex paths, correlation grouping, reset paths, and queue persistence. Coordinate parallel flows, synchronize events, and debounce sensors.",
     "author": "Daniel Caspi <dan@element26.net>",
     "license": "MIT",
@@ -63,8 +63,7 @@
         "version": ">=3.0.0",
         "nodes": {
             "join-wait": "join-wait.js"
-        },
-        "examples": "examples"
+        }
     },
     "dependencies": {
         "jsonata": "^2.0.5"

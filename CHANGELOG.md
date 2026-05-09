@@ -4,6 +4,34 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [0.6.3] - 2026-05-09
+
+### Fixed
+
+- **Open example flows button** is finally working. The 0.6.2 fix
+  invoked the import action via `RED.tray.close(cb)`'s callback, but
+  that callback fires before the `editor:close` event — so
+  clipboard.js's `disabled` guard was still set when the action ran,
+  and the dialog never appeared. Now listens for `editor:close`
+  explicitly and defers the action one tick past the synchronous
+  listener chain that clears the flag. Adds a guard against fast
+  double-clicks and a feature-detect fallback to
+  `core:show-import-dialog` for Node-RED < 3.1.
+
+### Changed
+
+- **`engines.node` lowered to `>=18.5`** to match the Node-RED 4.x
+  minimum (per the contrib-node packaging spec). CI matrix gains
+  Node 18 so the claim is verified, not asserted.
+- **Editor template updated to `const`/`let` and arrow functions**.
+  Pure stylistic refactor of `join-wait.html`'s IIFE; no behaviour
+  change. `function` is preserved where Node-RED binds `this`
+  (validators, `oneditprepare`/`save`/`resize`, jQuery `.each`/`.map`
+  callbacks).
+- Dropped the `node-red.examples` field from `package.json` — not
+  part of the packaging spec; examples auto-discover from
+  `examples/`.
+
 ## [0.6.2] - 2026-05-09
 
 ### Fixed
