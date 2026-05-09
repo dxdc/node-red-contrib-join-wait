@@ -139,6 +139,48 @@
 
 <script type="text/javascript">
     (function () {
+        // Form-element selectors gathered in one place. Keeps the rest
+        // of the IIFE free of stringly-typed `#node-input-*` lookups
+        // and makes the editor surface auditable at a glance — every
+        // hook into the dialog is listed here.
+        var SEL = {
+            pathField: '#node-input-pathTopic',
+            pathFieldType: '#node-input-pathTopicType',
+            correlator: '#node-input-correlationTopic',
+            correlatorType: '#node-input-correlationTopicType',
+            timeout: '#node-input-timeout',
+            timeoutUnits: '#node-input-timeoutUnits',
+            useRegex: '#node-input-useRegex',
+            persistOnRestart: '#node-input-persistOnRestart',
+            persistStore: '#node-input-persistStore',
+            outputPreview: '#join-wait-output-preview',
+            timeoutHint: '#join-wait-timeout-hint',
+            examplesButton: '#join-wait-open-examples',
+            persistStoreRow: '#join-wait-persist-store-row',
+            persistStoreTip: '#join-wait-persist-store-tip',
+            dialogForm: '#dialog-form',
+            advancedDetails: '#dialog-form details',
+        };
+        // editableList wrapper IDs (no leading '#'); consumers either
+        // pass them to readEditableList or interpolate `#` themselves.
+        var LIST_ID = {
+            paths: 'node-input-paths-container',
+            expire: 'node-input-pathsToExpire-container',
+        };
+        function listInputs(id) {
+            return $('#' + id + ' input[type=text]');
+        }
+        // Read the typed-input pair behind the Path field — name + type.
+        // Used wherever both halves are needed together (currently the
+        // output preview); centralising it avoids drift between the two
+        // selectors.
+        function readPathField() {
+            return {
+                name: $(SEL.pathField).val() || 'topic',
+                type: $(SEL.pathFieldType).val() || 'msg',
+            };
+        }
+
         function arrayValidator(allowEmpty, requireUnique) {
             return function (v) {
                 // Accept legacy JSON-string format too, for back-compat with old flows.
@@ -203,12 +245,12 @@
         function validateRow(input, ownValues, otherValues, opts) {
             var requireUnique = opts && opts.requireUnique;
             var otherListLabel = (opts && opts.otherListLabel) || '';
-            var v = String(input.val() || '');
-            if (v === '') {
+            var value = String(input.val() || '');
+            if (value === '') {
                 setRowValid(input, false, 'path name cannot be empty');
                 return false;
             }
-            if ($('#node-input-useRegex').is(':checked') && !isValidRegex(v)) {
+            if ($(SEL.useRegex).is(':checked') && !isValidRegex(value)) {
                 setRowValid(input, false, 'invalid regular expression');
                 return false;
             }
@@ -216,14 +258,18 @@
                 requireUnique &&
                 ownValues &&
                 ownValues.filter(function (x) {
-                    return x === v;
+                    return x === value;
                 }).length > 1
             ) {
                 setRowValid(input, false, 'duplicate entry — must be unique');
                 return false;
             }
-            if (otherValues && otherValues.indexOf(v) !== -1) {
-                setRowValid(input, false, '"' + v + '" is also in ' + otherListLabel + " — paths shouldn't overlap");
+            if (otherValues && otherValues.indexOf(value) !== -1) {
+                setRowValid(
+                    input,
+                    false,
+                    '"' + value + '" is also in ' + otherListLabel + " — paths shouldn't overlap",
+                );
                 return false;
             }
             setRowValid(input, true);
@@ -235,8 +281,8 @@
         // removed — so duplicate and cross-list overlap warnings are
         // always in sync with the current state.
         function validateAllRows() {
-            var $paths = $('#node-input-paths-container input[type=text]');
-            var $expire = $('#node-input-pathsToExpire-container input[type=text]');
+            var $paths = listInputs(LIST_ID.paths);
+            var $expire = listInputs(LIST_ID.expire);
             var pathValues = $paths
                 .map(function () {
                     return String($(this).val() || '');
@@ -339,7 +385,7 @@
 
         // Re-validate every editableList row when the regex toggle flips.
         function rebindRegexValidation() {
-            $('#node-input-useRegex').on('change', validateAllRows);
+            $(SEL.useRegex).on('change', validateAllRows);
         }
 
         function readEditableList(containerId) {
@@ -373,16 +419,15 @@
         // mis-render as msg. Repeated entries surface as `(×n)` so the
         // n-of-the-same semantic is visible.
         function updateOutputPreview() {
-            var paths = readEditableList('node-input-paths-container');
+            var paths = readEditableList(LIST_ID.paths);
             var counts = Object.create(null);
             var order = [];
             paths.forEach(function (p) {
                 if (counts[p] === undefined) order.push(p);
                 counts[p] = (counts[p] || 0) + 1;
             });
-            var pathField = $('#node-input-pathTopic').val() || 'topic';
-            var pathType = $('#node-input-pathTopicType').val() || 'msg';
-            var $tip = $('#join-wait-output-preview');
+            var field = readPathField();
+            var $tip = $(SEL.outputPreview);
             if (order.length === 0) {
                 $tip.text('');
                 return;
@@ -391,16 +436,16 @@
                 return counts[p] > 1 ? p + ' (×' + counts[p] + '): …' : p + ': …';
             });
             if (order.length > 4) entries.push('…');
-            $tip.text('→ ' + pathType + '.' + pathField + ' = { ' + entries.join(', ') + ' }');
+            $tip.text('→ ' + field.type + '.' + field.name + ' = { ' + entries.join(', ') + ' }');
         }
 
         // Warn when the resolved timeout is impractically short (the README
         // recommends padding ~5–10 ms for evaluation overhead).
         function updateTimeoutHint() {
-            var t = Number($('#node-input-timeout').val()) || 0;
-            var u = Number($('#node-input-timeoutUnits').val()) || 1;
+            var t = Number($(SEL.timeout).val()) || 0;
+            var u = Number($(SEL.timeoutUnits).val()) || 1;
             var ms = t * u;
-            var $hint = $('#join-wait-timeout-hint');
+            var $hint = $(SEL.timeoutHint);
             if (ms > 0 && ms < 50) {
                 $hint.find('span').text('Very short — pad ~10 ms to leave room for evaluation overhead.');
                 $hint.show();
@@ -415,7 +460,7 @@
         // proxies; falls back to the bare relative URL on older
         // Node-RED versions where the setting isn't exposed.
         function populatePersistStores(currentValue) {
-            var $sel = $('#node-input-persistStore');
+            var $sel = $(SEL.persistStore);
             var base = (RED.settings && RED.settings.apiRootUrl) || '';
             $.getJSON(base + 'join-wait/stores')
                 .done(function (stores) {
@@ -461,7 +506,7 @@
         // explicitly. No upper clamp — when the user drags the tray
         // taller they want to see more rows.
         function resizePathsList() {
-            var $form = $('#dialog-form');
+            var $form = $(SEL.dialogForm);
             if (!$form.length || !lastTraySize || !lastTraySize.height) return;
             var height = lastTraySize.height;
             $form.children(':not(.node-input-paths-container-row)').each(function () {
@@ -470,7 +515,7 @@
             });
             height -= 12; // breathing room for margins/padding the loop misses
             if (height < 140) height = 140;
-            $('#node-input-paths-container').editableList('height', height);
+            $('#' + LIST_ID.paths).editableList('height', height);
         }
 
         function openExamplesDialog() {
@@ -527,14 +572,14 @@
                 return this.name ? 'node_label_italic' : '';
             },
             oneditprepare: function () {
-                $('#node-input-pathTopic').typedInput({
+                $(SEL.pathField).typedInput({
                     default: this.pathTopicType || 'msg',
-                    typeField: $('#node-input-pathTopicType'),
+                    typeField: $(SEL.pathFieldType),
                     types: ['msg', 'flow', 'global'],
                 });
-                $('#node-input-correlationTopic').typedInput({
+                $(SEL.correlator).typedInput({
                     default: this.correlationTopicType || 'undefined',
-                    typeField: $('#node-input-correlationTopicType'),
+                    typeField: $(SEL.correlatorType),
                     types: [
                         { value: 'undefined', label: RED._('common.type.undefined'), hasValue: false },
                         'msg',
@@ -547,49 +592,49 @@
                 // — the runtime multiplies the value by the unit factor,
                 // so fractional units are valid. step:1 keeps the up/down
                 // arrows snappy for the common integer case.
-                $('#node-input-timeout').spinner({ min: 0.001, step: 1, numberFormat: 'n' });
+                $(SEL.timeout).spinner({ min: 0.001, step: 1, numberFormat: 'n' });
 
-                initEditableList('node-input-paths-container', toArray(this.paths), {
+                initEditableList(LIST_ID.paths, toArray(this.paths), {
                     placeholder: 'e.g. sensor_1',
                     onChange: updateOutputPreview,
                     height: 200,
                 });
-                initEditableList('node-input-pathsToExpire-container', toArray(this.pathsToExpire), {
+                initEditableList(LIST_ID.expire, toArray(this.pathsToExpire), {
                     placeholder: 'e.g. abort',
                     height: 140,
                 });
                 rebindRegexValidation();
 
-                $('#node-input-pathTopic').on('change input', updateOutputPreview);
+                $(SEL.pathField).on('change input', updateOutputPreview);
                 updateOutputPreview();
 
-                $('#node-input-timeout, #node-input-timeoutUnits').on('change input', updateTimeoutHint);
+                $(SEL.timeout + ', ' + SEL.timeoutUnits).on('change input', updateTimeoutHint);
                 updateTimeoutHint();
 
                 populatePersistStores(this.persistStore);
 
                 // Hide the Persist store row when Preserve queue is off —
                 // the override is meaningless without persistence enabled.
-                var $persistRow = $('#join-wait-persist-store-row, #join-wait-persist-store-tip');
+                var $persistRow = $(SEL.persistStoreRow + ', ' + SEL.persistStoreTip);
                 function syncPersistStoreVisibility() {
-                    $persistRow.toggle($('#node-input-persistOnRestart').is(':checked'));
+                    $persistRow.toggle($(SEL.persistOnRestart).is(':checked'));
                     resizePathsList();
                 }
-                $('#node-input-persistOnRestart').on('change', syncPersistStoreVisibility);
+                $(SEL.persistOnRestart).on('change', syncPersistStoreVisibility);
                 syncPersistStoreVisibility();
 
-                $('#join-wait-open-examples').on('click', openExamplesDialog);
+                $(SEL.examplesButton).on('click', openExamplesDialog);
 
                 // Re-run the editableList resize math when Advanced is
                 // expanded/collapsed — oneditresize only fires on tray
                 // drag, so without this the Wait paths list keeps the
                 // height it had before the toggle and doesn't reclaim
                 // (or yield) space.
-                $('#dialog-form details').on('toggle', resizePathsList);
+                $(SEL.advancedDetails).on('toggle', resizePathsList);
             },
             oneditsave: function () {
-                this.paths = readEditableList('node-input-paths-container');
-                this.pathsToExpire = readEditableList('node-input-pathsToExpire-container');
+                this.paths = readEditableList(LIST_ID.paths);
+                this.pathsToExpire = readEditableList(LIST_ID.expire);
             },
             oneditresize: function (size) {
                 lastTraySize = size;
