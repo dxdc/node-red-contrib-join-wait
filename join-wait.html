@@ -139,10 +139,7 @@
 
 <script type="text/javascript">
     (function () {
-        // Form-element selectors gathered in one place. Keeps the rest
-        // of the IIFE free of stringly-typed `#node-input-*` lookups
-        // and makes the editor surface auditable at a glance — every
-        // hook into the dialog is listed here.
+        // Every DOM hook the editor uses, in one place.
         const SEL = {
             pathField: '#node-input-pathTopic',
             pathFieldType: '#node-input-pathTopicType',
@@ -168,10 +165,7 @@
             expire: 'node-input-pathsToExpire-container',
         };
         const listInputs = (id) => $('#' + id + ' input[type=text]');
-        // Read the typed-input pair behind the Path field — name + type.
-        // Used wherever both halves are needed together (currently the
-        // output preview); centralising it avoids drift between the two
-        // selectors.
+        // Path-field name + typedInput type, read together to avoid drift.
         const readPathField = () => ({
             name: $(SEL.pathField).val() || 'topic',
             type: $(SEL.pathFieldType).val() || 'msg',
@@ -262,10 +256,8 @@
             return true;
         };
 
-        // Re-validate every row in both editableLists. Called whenever
-        // any row changes, the regex toggle flips, or rows are added /
-        // removed — so duplicate and cross-list overlap warnings are
-        // always in sync with the current state.
+        // Re-validate every row across both lists so duplicate and
+        // cross-list overlap warnings stay in sync.
         const validateAllRows = () => {
             const $paths = listInputs(LIST_ID.paths);
             const $expire = listInputs(LIST_ID.expire);
@@ -298,11 +290,8 @@
         const initEditableList = (containerId, items, opts) => {
             const $container = $('#' + containerId);
             const placeholder = (opts && opts.placeholder) || 'e.g. sensor_1';
-            // A numeric height makes editableList scroll its items
-            // internally past the limit — without it (height:'auto'), a
-            // long list grows the wrapper and visually overlaps the form
-            // rows that follow. The actual height is recomputed in
-            // oneditresize to fill the available tray space.
+            // Numeric height → list scrolls internally past the limit.
+            // Recomputed in oneditresize to fill the tray.
             $container.editableList({
                 addItem: (row, index, data) => {
                     const value = (data && data.value) || '';
@@ -327,11 +316,8 @@
                             }, 0);
                         }
                     });
-                    // Bulk-paste: paste newline-separated text into any
-                    // row to fill the current row + add a new row per
-                    // remaining line. Whitespace-only and empty lines
-                    // are dropped. Single-line pastes fall through to
-                    // the browser's default paste handling.
+                    // Bulk-paste newline-separated text into multiple
+                    // rows. Single-line pastes fall through to default.
                     input.on('paste', (e) => {
                         const clip = (e.originalEvent || e).clipboardData;
                         if (!clip) return;
@@ -399,11 +385,8 @@
             return [];
         };
 
-        // Render a tiny preview of what the path-field property looks
-        // like on the success output, derived from the current Wait paths
-        // list. Prefix matches the typed-input type so flow/global don't
-        // mis-render as msg. Repeated entries surface as `(×n)` so the
-        // n-of-the-same semantic is visible.
+        // Preview of the merged success output. Repeated entries
+        // surface as `(×n)` so the n-of-the-same semantic is visible.
         const updateOutputPreview = () => {
             const paths = readEditableList(LIST_ID.paths);
             const counts = Object.create(null);
@@ -438,11 +421,9 @@
             }
         };
 
-        // Populate the Persist store <select> from the runtime via our
-        // /join-wait/stores admin route. apiRootUrl prefixes the call so
-        // it resolves correctly under custom httpAdminRoot / reverse
-        // proxies; falls back to the bare relative URL on older
-        // Node-RED versions where the setting isn't exposed.
+        // Populate the Persist store <select> from /join-wait/stores.
+        // apiRootUrl prefixes the call so it resolves under custom
+        // httpAdminRoot / reverse proxies.
         const populatePersistStores = (currentValue) => {
             const $sel = $(SEL.persistStore);
             const base = (RED.settings && RED.settings.apiRootUrl) || '';
@@ -482,13 +463,8 @@
         // the next tray drag.
         let lastTraySize = null;
 
-        // Stretch the Wait paths editableList to fill the tray. Mirrors
-        // the pattern in Node-RED core (switch/change/httprequest):
-        // subtract every other row's outer height from the tray height
-        // and give the remainder to the list. The :visible filter mirrors
-        // httprequest so hidden rows (e.g. timeout-hint) are skipped
-        // explicitly. No upper clamp — when the user drags the tray
-        // taller they want to see more rows.
+        // Stretch the Wait paths editableList to fill the tray —
+        // pattern from core switch/change/httprequest.
         const resizePathsList = () => {
             const $form = $(SEL.dialogForm);
             if (!$form.length || !lastTraySize || !lastTraySize.height) return;
@@ -504,14 +480,41 @@
             $('#' + LIST_ID.paths).editableList('height', height);
         };
 
+        // clipboard.js disables import actions while an edit tray is
+        // open, and RED.tray.close(cb) fires cb before the editor:close
+        // event — so we listen for editor:close ourselves and defer one
+        // tick past the synchronous listener chain that clears the flag.
+        // The pending guard suppresses a fast double-click registering
+        // two listeners.
+        let pendingExamplesOpen = false;
         const openExamplesDialog = () => {
-            // The import dialog opens as a modal above the edit tray, so
-            // the user can pick a flow and on close return to this edit
-            // dialog with in-flight edits intact. The earlier approach of
-            // closing the tray first was unreliable (close-callback drops
-            // when stack races editor teardown).
-            if (RED.actions && typeof RED.actions.invoke === 'function') {
-                RED.actions.invoke('core:show-examples-import-dialog');
+            if (pendingExamplesOpen) return;
+            pendingExamplesOpen = true;
+            const invoke = () => {
+                setTimeout(() => {
+                    pendingExamplesOpen = false;
+                    if (!RED.actions || typeof RED.actions.invoke !== 'function') return;
+                    // core:show-examples-import-dialog was added in Node-RED 3.1.
+                    const actions = RED.actions.list && RED.actions.list();
+                    const hasExamples =
+                        Array.isArray(actions) &&
+                        actions.some((a) => (a && a.id) === 'core:show-examples-import-dialog');
+                    RED.actions.invoke(hasExamples ? 'core:show-examples-import-dialog' : 'core:show-import-dialog');
+                }, 0);
+            };
+            if (RED.events && typeof RED.events.once === 'function') {
+                RED.events.once('editor:close', invoke);
+            } else if (RED.events && typeof RED.events.on === 'function') {
+                const handler = () => {
+                    if (RED.events.off) RED.events.off('editor:close', handler);
+                    invoke();
+                };
+                RED.events.on('editor:close', handler);
+            }
+            if (RED.tray && typeof RED.tray.close === 'function') {
+                RED.tray.close();
+            } else {
+                invoke();
             }
         };
 
@@ -540,10 +543,9 @@
                 firstMsg: { value: 'true', required: true },
                 mapPayload: { value: 'false', required: true },
                 disableComplete: { value: false },
-                // Defaults to true so the queue survives a redeploy out of
-                // the box (uses the default in-memory context store).
-                // For full Node-RED restart persistence the user still needs
-                // to point Persist store at a configured persistent store.
+                // On by default → survives redeploys via the in-memory
+                // context store. Restart-persistence still needs Persist
+                // store pointing at a persistent context.
                 persistOnRestart: { value: true },
                 persistStore: { value: '' },
             },
@@ -574,10 +576,7 @@
                         'jsonata',
                     ],
                 });
-                // Spinner accepts decimals (1.5 seconds, 0.25 hours, …)
-                // — the runtime multiplies the value by the unit factor,
-                // so fractional units are valid. step:1 keeps the up/down
-                // arrows snappy for the common integer case.
+                // Decimals OK (runtime multiplies by the unit factor).
                 $(SEL.timeout).spinner({ min: 0.001, step: 1, numberFormat: 'n' });
 
                 initEditableList(LIST_ID.paths, toArray(this.paths), {
@@ -599,8 +598,7 @@
 
                 populatePersistStores(this.persistStore);
 
-                // Hide the Persist store row when Preserve queue is off —
-                // the override is meaningless without persistence enabled.
+                // Persist store row is meaningless without Preserve queue.
                 const $persistRow = $(SEL.persistStoreRow + ', ' + SEL.persistStoreTip);
                 const syncPersistStoreVisibility = () => {
                     $persistRow.toggle($(SEL.persistOnRestart).is(':checked'));
@@ -611,11 +609,8 @@
 
                 $(SEL.examplesButton).on('click', openExamplesDialog);
 
-                // Re-run the editableList resize math when Advanced is
-                // expanded/collapsed — oneditresize only fires on tray
-                // drag, so without this the Wait paths list keeps the
-                // height it had before the toggle and doesn't reclaim
-                // (or yield) space.
+                // Reflow the list when Advanced toggles (oneditresize
+                // only fires on tray drag).
                 $(SEL.advancedDetails).on('toggle', resizePathsList);
             },
             oneditsave: function () {
