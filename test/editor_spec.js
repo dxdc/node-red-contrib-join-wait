@@ -89,4 +89,53 @@ describe('editor HTML', function () {
             html.should.match(pattern);
         });
     });
+
+    describe('help text', function () {
+        // Carve out just the data-help-name script so drift checks ignore
+        // the editor template (which does legitimately reference some
+        // legacy paths via back-compat code).
+        var helpMatch = html.match(/data-help-name="join-wait">([\s\S]*?)<\/script>/);
+        var helpBody = helpMatch && helpMatch[1];
+
+        it('isolates a help template', function () {
+            should(helpBody).be.a.String().and.not.be.empty();
+        });
+
+        it('does not reference removed/legacy config keys or paths', function () {
+            // Each entry was either renamed, removed, or never existed
+            // and would mislead a reader of the help text.
+            //
+            // - ignoreUnmatched: renamed to warnUnmatched (pre-0.6).
+            // - {userDir}/join-wait/: file-based persistence path that
+            //   was removed when 0.6 moved persistence to the context
+            //   store. Regression fence for the 0.6.2 stale-help fix.
+            // - node-persist: the dependency removed in 0.6.
+            ['ignoreUnmatched', '{userDir}/join-wait/', 'node-persist'].forEach(function (legacy) {
+                var pattern = new RegExp(legacy.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'));
+                helpBody.should.not.match(pattern);
+            });
+        });
+
+        it('mentions the context store as the persistence backend', function () {
+            // 0.6 moved persistence to RED context; the help should say so.
+            helpBody.should.match(/context/i);
+        });
+    });
+
+    it('uses RED.settings.apiRootUrl when calling the admin route', function () {
+        // The bare relative URL works in default setups but breaks under
+        // a custom httpAdminRoot or reverse proxy. Regression fence.
+        html.should.match(/apiRootUrl[\s\S]*?join-wait\/stores/);
+    });
+
+    it('exposes a bulk-paste handler on editableList rows', function () {
+        // Pasting newline-separated text into a row splits across rows.
+        html.should.match(/input\.on\(['"]paste['"]/);
+    });
+
+    it('cross-validates Wait paths and Reset paths', function () {
+        // validateAllRows runs after every change so duplicate-in-Reset
+        // and overlap-with-Wait warnings stay in sync.
+        html.should.match(/function validateAllRows/);
+    });
 });
