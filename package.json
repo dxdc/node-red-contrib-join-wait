@@ -24,7 +24,7 @@
     ],
     "main": "join-wait.js",
     "engines": {
-        "node": ">=20"
+        "node": ">=18.5"
     },
     "files": [
         "join-wait.js",
