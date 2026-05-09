@@ -15,8 +15,10 @@
         or an object with multiple keys.
     </div>
 
-    <div class="form-row">
+    <div class="form-row" style="margin-bottom:4px">
         <label title="Path names to wait for; repeat an entry to require it n times."><i class="fa fa-code-fork"></i> Wait paths</label>
+    </div>
+    <div class="form-row node-input-paths-container-row">
         <ol id="node-input-paths-container"></ol>
     </div>
     <div class="form-tips" style="margin-bottom:6px">
@@ -67,8 +69,10 @@
     <details style="margin-top:14px">
     <summary style="cursor:pointer; font-weight:bold; padding:6px 0">Advanced</summary>
 
-    <div class="form-row" style="margin-top:10px">
+    <div class="form-row" style="margin-top:10px; margin-bottom:4px">
         <label title="Paths that immediately drain the queue to the expired output."><i class="fa fa-times-circle-o"></i> Reset paths</label>
+    </div>
+    <div class="form-row node-input-pathsToExpire-container-row">
         <ol id="node-input-pathsToExpire-container"></ol>
     </div>
     <div class="form-tips" style="margin-bottom:12px">
@@ -208,8 +212,12 @@
 
         function initEditableList(containerId, items, opts) {
             var $container = $('#' + containerId);
-            $container.css({ 'min-height': '100px' });
             var placeholder = (opts && opts.placeholder) || 'e.g. sensor_1';
+            // A numeric height makes editableList scroll its items
+            // internally past the limit — without it (height:'auto'), a
+            // long list grows the wrapper and visually overlaps the form
+            // rows that follow. The actual height is recomputed in
+            // oneditresize to fill the available tray space.
             $container.editableList({
                 addItem: function (row, index, data) {
                     var value = (data && data.value) || '';
@@ -243,7 +251,7 @@
                 },
                 removable: true,
                 sortable: true,
-                height: 'auto',
+                height: (opts && opts.height) || 200,
             });
             (items || []).forEach(function (v) {
                 $container.editableList('addItem', { value: v });
@@ -351,20 +359,39 @@
                 });
         }
 
+        // Last `size` handed to oneditresize. Cached so the <details>
+        // toggle handler can re-run the resize math without waiting for
+        // the next tray drag.
+        var lastTraySize = null;
+
+        // Stretch the Wait paths editableList to fill the tray. Mirrors
+        // the pattern in Node-RED core (switch/change/httprequest):
+        // subtract every other row's outer height from the tray height
+        // and give the remainder to the list. The :visible filter mirrors
+        // httprequest so hidden rows are skipped explicitly. No upper
+        // clamp — when the user drags the tray taller they want to see
+        // more rows.
+        function resizePathsList() {
+            var $form = $('#dialog-form');
+            if (!$form.length || !lastTraySize || !lastTraySize.height) return;
+            var height = lastTraySize.height;
+            $form.children(':not(.node-input-paths-container-row)').each(function () {
+                var $r = $(this);
+                if ($r.is(':visible')) height -= $r.outerHeight(true) || 0;
+            });
+            height -= 12; // breathing room for margins/padding the loop misses
+            if (height < 140) height = 140;
+            $('#node-input-paths-container').editableList('height', height);
+        }
+
         function openExamplesDialog() {
-            // The edit tray is on top of the editor, so the import tray
-            // can't surface beneath it. Close this tray first (which cancels
-            // the in-flight edit), then invoke the core import dialog so the
-            // user can pick Examples → join-wait.
-            var invoke = function () {
-                if (RED.actions && typeof RED.actions.invoke === 'function') {
-                    RED.actions.invoke('core:show-import-dialog');
-                }
-            };
-            if (RED.tray && typeof RED.tray.close === 'function') {
-                RED.tray.close(invoke);
-            } else {
-                invoke();
+            // The import dialog opens as a modal above the edit tray, so
+            // the user can pick a flow and on close return to this edit
+            // dialog with in-flight edits intact. The earlier approach of
+            // closing the tray first was unreliable (close-callback drops
+            // when stack races editor teardown).
+            if (RED.actions && typeof RED.actions.invoke === 'function') {
+                RED.actions.invoke('core:show-examples-import-dialog');
             }
         }
 
@@ -432,9 +459,11 @@
                 initEditableList('node-input-paths-container', toArray(this.paths), {
                     placeholder: 'e.g. sensor_1',
                     onChange: updateOutputPreview,
+                    height: 200,
                 });
                 initEditableList('node-input-pathsToExpire-container', toArray(this.pathsToExpire), {
                     placeholder: 'e.g. abort',
+                    height: 140,
                 });
                 rebindRegexValidation();
 
@@ -447,14 +476,21 @@
                 populatePersistStores(this.persistStore);
 
                 $('#join-wait-open-examples').on('click', openExamplesDialog);
+
+                // Re-run the editableList resize math when Advanced is
+                // expanded/collapsed — oneditresize only fires on tray
+                // drag, so without this the Wait paths list keeps the
+                // height it had before the toggle and doesn't reclaim
+                // (or yield) space.
+                $('#dialog-form details').on('toggle', resizePathsList);
             },
             oneditsave: function () {
                 this.paths = readEditableList('node-input-paths-container');
                 this.pathsToExpire = readEditableList('node-input-pathsToExpire-container');
             },
-            oneditresize: function () {
-                $('#node-input-paths-container').css('min-height', '100px');
-                $('#node-input-pathsToExpire-container').css('min-height', '60px');
+            oneditresize: function (size) {
+                lastTraySize = size;
+                resizePathsList();
             },
         });
     })();
