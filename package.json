@@ -86,8 +86,8 @@
         "test": "mocha \"test/**/*_spec.js\"",
         "coverage": "c8 --reporter=text-summary --reporter=lcov --check-coverage --lines 95 --statements 95 --functions 95 --branches 90 --exclude 'test/**' --exclude 'coverage/**' npm test",
         "lint": "eslint .",
-        "format": "prettier --write \"{.,test,lib}/*.{js,json}\" *.html *.md",
-        "format:check": "prettier --check \"{.,test,lib}/*.{js,json}\" *.html *.md",
+        "format": "prettier --write \"{.,test,lib}/*.{js,mjs,json}\" *.html *.md",
+        "format:check": "prettier --check \"{.,test,lib}/*.{js,mjs,json}\" *.html *.md",
         "spellcheck": "cspell \"**/*.md\""
     }
 }

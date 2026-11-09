@@ -33,6 +33,10 @@ jobs:
         with:
           node-version: ${{ matrix.node }}
       - run: npm install --no-audit --no-fund
+      # Node-RED 5 needs Node 22.9+, so older Node versions test against
+      # Node-RED 4 instead. Between them the matrix covers both majors.
+      - if: matrix.node < 22
+        run: npm install --no-save --no-audit --no-fund node-red@4
       # Coverage runs tests, so on Node 24 (the LTS we publish from) we
       # replace `npm test` with the coverage script and publish the
       # artifact. Other Node versions just run the suite.
