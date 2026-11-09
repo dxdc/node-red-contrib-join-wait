@@ -4,6 +4,13 @@ All notable changes to this project are documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+
+- Tested against Node-RED 5.x (on Node 22 and 24) in addition to
+  Node-RED 4.x (on Node 18 and 20). No code changes were needed.
+
 ## [0.6.3] - 2026-05-09
 
 ### Fixed

@@ -69,15 +69,15 @@
         "jsonata": "^2.0.5"
     },
     "devDependencies": {
-        "@eslint/js": "^9.10.0",
+        "@eslint/js": "^10.0.1",
         "@types/node-red": "^1.3.5",
-        "c8": "^10.1.2",
-        "cspell": "^8.13.3",
-        "eslint": "^9.10.0",
-        "eslint-plugin-mocha": "^10.5.0",
-        "globals": "^15.9.0",
-        "mocha": "^10.7.3",
-        "node-red": "^4.0.3",
+        "c8": "^12.0.0",
+        "cspell": "^10.1.1",
+        "eslint": "^10.9.1",
+        "eslint-plugin-mocha": "^12.0.2",
+        "globals": "^17.11.0",
+        "mocha": "^11.8.0",
+        "node-red": "^5.0.4",
         "node-red-node-test-helper": "^0.3.6",
         "prettier": "^3.3.3",
         "should": "^13.2.3"
@@ -86,8 +86,8 @@
         "test": "mocha \"test/**/*_spec.js\"",
         "coverage": "c8 --reporter=text-summary --reporter=lcov --check-coverage --lines 95 --statements 95 --functions 95 --branches 90 --exclude 'test/**' --exclude 'coverage/**' npm test",
         "lint": "eslint .",
-        "format": "prettier --write \"{.,test,lib}/*.{js,json}\" *.html *.md",
-        "format:check": "prettier --check \"{.,test,lib}/*.{js,json}\" *.html *.md",
+        "format": "prettier --write \"{.,test,lib}/*.{js,mjs,json}\" *.html *.md",
+        "format:check": "prettier --check \"{.,test,lib}/*.{js,mjs,json}\" *.html *.md",
         "spellcheck": "cspell \"**/*.md\""
     }
 }

@@ -1,10 +1,9 @@
-'use strict';
+// ESM because eslint-plugin-mocha 12 ships as ESM only (no require() export).
+import js from '@eslint/js';
+import mocha from 'eslint-plugin-mocha';
+import globals from 'globals';
 
-const js = require('@eslint/js');
-const mocha = require('eslint-plugin-mocha');
-const globals = require('globals');
-
-module.exports = [
+export default [
     {
         ignores: ['coverage/**', 'node_modules/**', '.nyc_output/**'],
     },
@@ -28,17 +27,15 @@ module.exports = [
         },
     },
     {
+        files: ['**/*.mjs'],
+        languageOptions: { sourceType: 'module' },
+    },
+    {
         files: ['test/**/*.js'],
-        plugins: { mocha },
-        languageOptions: {
-            globals: {
-                ...globals.mocha,
-            },
-        },
+        ...mocha.configs.recommended,
         rules: {
             ...mocha.configs.recommended.rules,
             'mocha/no-mocha-arrows': 'off',
-            'mocha/no-setup-in-describe': 'off',
         },
     },
 ];

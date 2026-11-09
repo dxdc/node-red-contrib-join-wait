@@ -190,7 +190,7 @@ flows:
 
 ## Compatibility
 
-- Node-RED 3.x and 4.x.
+- Node-RED 3.x, 4.x and 5.x.
 - Node.js 20 / 22 / 24.
 
 ## Migrating from 0.5.x
